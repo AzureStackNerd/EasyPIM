@@ -23,7 +23,7 @@ function Update-Policy  {
     )
     Write-Verbose "Updating Policy $policyID"
     write-Verbose "script:scope = $script:scope"
-    #write-verbose "rules: $rules"
+    write-verbose "rules: $rules"
     $scope = $script:scope
     $ARMhost = Get-PIMAzureEnvironmentEndpoint -EndpointType 'ARM'
     #$ARMendpoint = "$ARMhost/$scope/providers/Microsoft.Authorization"
