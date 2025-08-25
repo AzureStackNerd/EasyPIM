@@ -311,7 +311,7 @@ function Set-PIMAzureResourcePolicy {
 
             #Patching the policy
             if ($PSCmdlet.ShouldProcess($_, "Udpdating policy")) {
-               $null = Update-Policy $config.policyID $allrules
+               $null = Update-Policy $config.policyID $allrules -verbose:$true
             }
 
         }
