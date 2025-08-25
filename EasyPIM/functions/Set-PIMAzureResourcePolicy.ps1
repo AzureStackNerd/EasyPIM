@@ -240,7 +240,7 @@ function Set-PIMAzureResourcePolicy {
                 if ( ($false -eq $AllowPermanentEligibility) -and ( ($MaximumEligibilityDuration -eq "") -or ($null -eq $MaximumEligibilityDuration) )){
                     throw "ERROR: you requested the assignement to expire but the maximum duration is not defined, please use the MaximumEligibilityDuration parameter"
                 }
-                $rules += Set-EligibilityAssignment $MaximumEligibilityDuration $AllowPermanentEligibility
+                $rules += Set-EligibilityAssignment $MaximumEligibilityDuration $AllowPermanentEligibility -verbose:$true
             }
 
             #active assignement limits
@@ -311,7 +311,7 @@ function Set-PIMAzureResourcePolicy {
 
             #Patching the policy
             if ($PSCmdlet.ShouldProcess($_, "Udpdating policy")) {
-               $null = Update-Policy $config.policyID $allrules -verbose:$true
+               $null = Update-Policy $config.policyID $allrules -verbose:$false
             }
 
         }
