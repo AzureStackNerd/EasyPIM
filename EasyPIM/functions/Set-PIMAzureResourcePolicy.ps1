@@ -241,7 +241,7 @@ function Set-PIMAzureResourcePolicy {
                 if ( ($false -eq $AllowPermanentEligibility) -and ( ($MaximumEligibilityDuration -eq "") -or ($null -eq $MaximumEligibilityDuration) )){
                     throw "ERROR: you requested the assignement to expire but the maximum duration is not defined, please use the MaximumEligibilityDuration parameter"
                 }
-                $rules += Set-EligibilityAssignment $MaximumEligibilityDuration $AllowPermanentEligibility -verbose:$true
+                $rules += Set-EligibilityAssignment $MaximumEligibilityDuration $AllowPermanentEligibility -verbose $true
                 Write-Host "REMCO:In IF" -ForegroundColor Yellow
             }
 
