@@ -233,7 +233,7 @@ function Set-PIMAzureResourcePolicy {
 
             # eligibility assignement
             Write-Host "REMCO:Checking Eligibility assignement settings" -ForegroundColor Yellow
-            if ( $PSBoundParameters.Keys.Contains(('MaximumEligibilityDuration') -or ( $PSBoundParameters.Keys.Contains(('AllowPermanentEligibility'))) {
+            if ( $PSBoundParameters.Keys.Contains('MaximumEligibilityDuration') -or ( $PSBoundParameters.Keys.Contains('AllowPermanentEligibility'))) {
                 #if values are not set, use the ones from the curent config
                 write-verbose "Maximum Eligibiliy duration from curent config: $($config.MaximumEligibleAssignmentDuration)"
                 if (!( $PSBoundParameters.Keys.Contains('MaximumEligibilityDuration'))) { $MaximumEligibilityDuration = $config.MaximumEligibleAssignmentDuration }
