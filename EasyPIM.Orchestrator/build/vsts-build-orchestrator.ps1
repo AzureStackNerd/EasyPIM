@@ -17,10 +17,31 @@ if (-not $WorkingDirectory) {
 }
 #endregion
 
-# Prepare publish folder
+# Prepare publish folder (use temp to avoid recursive self-copy)
 Write-Host "Creating and populating publishing directory"
-$publishDir = New-Item -Path $WorkingDirectory -Name publish -ItemType Directory -Force
-Copy-Item -Path "$($WorkingDirectory)\EasyPIM.Orchestrator" -Destination $publishDir.FullName -Recurse -Force
+$publishRoot = if ($env:RUNNER_TEMP) {
+    New-Item -Path $env:RUNNER_TEMP -Name ("easypim-orch-publish-" + ([guid]::NewGuid().ToString('N'))) -ItemType Directory -Force
+} else {
+    New-Item -Path ([System.IO.Path]::GetTempPath()) -Name ("easypim-orch-publish-" + ([guid]::NewGuid().ToString('N'))) -ItemType Directory -Force
+}
+# Maintain existing variable name semantics: $publishDir points to the publish root
+$publishDir = $publishRoot
+$moduleOutDir = New-Item -Path $publishDir.FullName -Name 'EasyPIM.Orchestrator' -ItemType Directory -Force
+
+# Copy module contents into publish folder, excluding any existing publish directory
+Get-ChildItem -LiteralPath $WorkingDirectory -Force | Where-Object { $_.Name -ne 'publish' } | ForEach-Object {
+    $dest = Join-Path $moduleOutDir.FullName $_.Name
+    Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force
+}
+Write-Host ("Publish root: {0}" -f $publishDir.FullName) -ForegroundColor DarkCyan
+
+    # Include private shared module inside Orchestrator package under 'shared/'
+    $sharedSrc = Join-Path (Split-Path (Split-Path $PSScriptRoot)) 'shared\\EasyPIM.Shared'
+    if (Test-Path $sharedSrc) {
+        $sharedDest = Join-Path "$($publishDir.FullName)\EasyPIM.Orchestrator" 'shared\\EasyPIM.Shared'
+        New-Item -ItemType Directory -Path $sharedDest -Force | Out-Null
+        Copy-Item -Path (Join-Path $sharedSrc '*') -Destination $sharedDest -Recurse -Force
+    }
 
 # Gather commands
 $text = @()
@@ -51,6 +72,15 @@ $psm1Path = "$($publishDir.FullName)\EasyPIM.Orchestrator\EasyPIM.Orchestrator.p
 $utf8BomEncoding = [System.Text.UTF8Encoding]::new($true)
 [System.IO.File]::WriteAllText($psm1Path, $combinedContent, $utf8BomEncoding)
 Write-Host "Wrote EasyPIM.Orchestrator.psm1 as UTF8 with BOM (enforced)" -ForegroundColor Yellow
+
+# Rewrite NestedModules path in orchestrator manifest to point to packaged 'shared/..'
+try {
+    $manifestPath = "$($publishDir.FullName)\\EasyPIM.Orchestrator\\EasyPIM.Orchestrator.psd1"
+    $rawMan = Get-Content $manifestPath -Raw -ErrorAction Stop
+    $rawMan = $rawMan -replace "\..\\\\shared\\\\EasyPIM\.Shared", 'shared\\EasyPIM.Shared'
+    Set-Content -Path $manifestPath -Value $rawMan -Encoding UTF8
+    Write-Host "Rewrote Orchestrator NestedModules path to packaged 'shared\\EasyPIM.Shared'" -ForegroundColor DarkCyan
+} catch { Write-Host "Manifest rewrite skipped/failed: $_" -ForegroundColor Yellow }
 
 # Test Module Import
 Write-Host "Testing module import to catch any syntax errors..."

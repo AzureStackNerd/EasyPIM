@@ -1,14 +1,15 @@
 ﻿Describe "Validating the module manifest" {
 	$moduleRoot = (Resolve-Path "$global:testroot\..\EasyPIM").Path
 	$manifest = ((Get-Content "$moduleRoot\EasyPIM.psd1") -join "`n") | Invoke-Expression
-	
+
 	# Detect Pester version for syntax compatibility
 	$pesterModule = Get-Module Pester
 	$pesterVersion = if ($pesterModule) { $pesterModule.Version } else { [Version]"0.0" }
 	$isLegacyPester = $pesterVersion.Major -lt 5
-	
+
 	Context "Basic resources validation" {
-		$files = Get-ChildItem "$moduleRoot\functions" -Recurse -File | Where-Object Name -like "*.ps1"
+		$files = Get-ChildItem "$moduleRoot\functions" -Recurse -File | Where-Object Name -like "*.ps1" |
+			Where-Object { $_.FullName -notlike (Join-Path $moduleRoot 'functions\_REMOVED_SHIMS_BACKUP\*') }
 		It "Exports all functions in the public folder" -TestCases @{ files = $files; manifest = $manifest } {
 
 			$functions = (Compare-Object -ReferenceObject $files.BaseName -DifferenceObject $manifest.FunctionsToExport | Where-Object SideIndicator -Like '<=').InputObject

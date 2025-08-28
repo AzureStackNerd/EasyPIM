@@ -1,1 +1,1 @@
-# Moved from EasyPIM/internal/functions/EPO_Logging.ps1
+# Intentionally left blank: logging helpers are provided by EasyPIM.Shared nested module
