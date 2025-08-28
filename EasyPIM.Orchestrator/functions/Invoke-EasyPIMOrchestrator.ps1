@@ -417,7 +417,7 @@ function Invoke-EasyPIMOrchestrator {
 		# 4. Perform cleanup operations AFTER policy processing (skip if requested or if assignments are skipped)
 		$cleanupResults = if ($Operations -contains "All" -and -not $SkipCleanup -and -not $SkipAssignments) {
 			Write-Host -Object "[CLEANUP] Performing cleanup operations based on updated policies..." -ForegroundColor Cyan
-			Invoke-EasyPIMCleanup -Config $processedConfig -Mode $Mode -TenantId $TenantId -SubscriptionId $SubscriptionId -WhatIf:$WhatIfPreference -WouldRemoveExportPath $WouldRemoveExportPath
+			Invoke-EasyPIMCleanup -Config $processedConfig -Mode $Mode -TenantId $TenantId -SubscriptionId $SubscriptionId -WouldRemoveExportPath $WouldRemoveExportPath -WhatIf:$WhatIfPreference
 		} else {
 			if ($SkipAssignments) { Write-Host -Object "[WARN] Skipping cleanup because SkipAssignments was specified (no assignment delta expected)" -ForegroundColor Yellow }
 			elseif ($SkipCleanup) { Write-Host -Object "[WARN] Skipping cleanup as requested by SkipCleanup parameter" -ForegroundColor Yellow }

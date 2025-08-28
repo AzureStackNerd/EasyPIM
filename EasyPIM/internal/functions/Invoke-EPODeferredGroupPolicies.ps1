@@ -26,7 +26,7 @@ function Invoke-EPODeferredGroupPolicies {
     .NOTES
     Uses Set-EPOGroupPolicy internally and clears the deferred queue upon completion.
     #>
-    [CmdletBinding()]
+    [CmdletBinding(SupportsShouldProcess = $true)]
     param (
         [Parameter(Mandatory = $true)]
         [string]$TenantId,
