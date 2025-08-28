@@ -7,10 +7,7 @@
     Copyright         = '(c) EasyPIM. All rights reserved.'
     Description       = 'Private shared helpers used internally by EasyPIM modules.'
     PowerShellVersion = '5.1'
-    FunctionsToExport = @(
-        'Write-SectionHeader'
-        'Initialize-EasyPIMAssignments'
-    ) # keep internal only
+    FunctionsToExport = @() # keep internal only
     AliasesToExport   = @()
     CmdletsToExport   = @()
     PrivateData       = @{ PSData = @{ Tags = @('EasyPIM','Shared','Private') } }
