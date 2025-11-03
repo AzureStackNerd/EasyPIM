@@ -123,8 +123,13 @@ function Invoke-EasyPIMOrchestrator {
 		$mgContext = Get-MgContext -ErrorAction SilentlyContinue
 		if (-not $mgContext) {
 			Write-Host "🔐 [AUTH] Microsoft Graph authentication required for EasyPIM operations." -ForegroundColor Yellow
-			Write-Host "🔐 [AUTH] Please connect to Microsoft Graph with appropriate scopes:" -ForegroundColor Yellow
-			Write-Host "  Connect-MgGraph -Scopes 'RoleManagement.ReadWrite.Directory'" -ForegroundColor Green
+			if ($Operations -ne "AzureRoles") {
+				Write-Host "🔐 [AUTH] Please connect to Microsoft Graph with appropriate scopes:" -ForegroundColor Yellow
+				Write-Host "  Connect-MgGraph -Scopes 'RoleManagement.ReadWrite.Directory'" -ForegroundColor Green
+			} else {
+				Write-Host "🔐 [AUTH] Please connect to Microsoft Graph:" -ForegroundColor Yellow
+				Write-Host "  Connect-MgGraph" -ForegroundColor Green
+			}
 			throw "Microsoft Graph authentication required. Please run Connect-MgGraph first."
 		}
 
@@ -141,7 +146,7 @@ function Invoke-EasyPIMOrchestrator {
 		# Check if we have required Graph scopes
 		$requiredScopes = @('RoleManagement.ReadWrite.Directory')
 		$currentScopes = $mgContext.Scopes
-		if (-not $currentScopes -or ($requiredScopes | Where-Object { $_ -notin $currentScopes })) {
+		if ((-not $currentScopes -or ($requiredScopes | Where-Object { $_ -notin $currentScopes })) -and ($Operations -ne "AzureRoles")) {
 			Write-Host "⚠️ [AUTH] Insufficient Microsoft Graph permissions detected." -ForegroundColor Yellow
 			Write-Host "🔐 [AUTH] Please reconnect with required scopes:" -ForegroundColor Yellow
 			Write-Host "  Connect-MgGraph -Scopes 'RoleManagement.ReadWrite.Directory'" -ForegroundColor Green
