@@ -82,7 +82,7 @@ function New-PIMAzureRoleAssignmentScheduleRequest {
 
         $restURI = "$armEndpoint/providers/Microsoft.Management/managementGroups/asn/providers/Microsoft.Authorization/roleAssignmentScheduleInstances?api-version=2020-10-01-preview"
         Write-Verbose "Checking for existing active assignments for principalId $principalId with role $roleName at scope $scope"
-        $response = Invoke-ARM -restURI $restURI -method get -verbose:$true
+        $response = Invoke-ARM -restURI $restURI -method get
         $roleActiveAssignment = $response.value.properties | Where-Object { $_.AssignmentType -eq "activated" -and $_.principalId -eq "$principalId" -and $_.roleDefinitionId.Split("/")[-1] -eq "$roleDefinitionId" -and $_.scope -eq "$scope" } | Select-Object -First 1
         if ($roleActiveAssignment) {
             $currentDateTimeUTC = Get-Date -AsUTC
@@ -125,7 +125,7 @@ function New-PIMAzureRoleAssignmentScheduleRequest {
         }
 
         $jsonBody = $body | ConvertTo-Json -Depth 10
-        $response = Invoke-ARM -restURI $restURI -method put -body $jsonBody -verbose:$true
+        $response = Invoke-ARM -restURI $restURI -method put -body $jsonBody
         if ($response) {
             Write-Verbose "Role assignment schedule request created successfully."
         }
