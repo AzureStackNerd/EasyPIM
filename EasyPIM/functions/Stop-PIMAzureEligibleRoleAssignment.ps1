@@ -1,8 +1,8 @@
 ﻿<#
     .Synopsis
-    Removes a PIM Azure role assignment by deactivating an active schedule request.
+    Stops an active PIM Azure role assignment.
     .Description
-    Submits a request to deactivate an active PIM Azure role assignment for the specified principal at the given scope. Returns the API response object on success.
+    Submits a request to stop (deactivate) an active PIM Azure role assignment for the specified principal at the given scope. Returns the API response object on success.
     .Parameter tenantID
     EntraID tenant ID (Mandatory)
     .Parameter principalId
@@ -16,13 +16,13 @@
     .Parameter justification
     The justification for the role deactivation request (optional, default: "Deactivating role")
     .Example
-    PS> Remove-PIMAzureRoleAssignmentScheduleRequest -tenantID $tid -principalId $pid -roleName "Contributor" -scope "/subscriptions/$sub"
+    PS> Stop-PIMAzureEligibleRoleAssignment -tenantID $tid -principalId $pid -roleName "Contributor" -scope "/subscriptions/$sub"
 
-    Deactivates the active PIM role assignment for the specified principal with Contributor role at the subscription scope.
+    Stops the active PIM role assignment for the specified principal with Contributor role at the subscription scope.
     .Example
-    PS> Remove-PIMAzureRoleAssignmentScheduleRequest -tenantID $tid -principalId $pid -roleName "Reader" -scope "/subscriptions/$sub" -justification "Maintenance completed"
+    PS> Stop-PIMAzureEligibleRoleAssignment -tenantID $tid -principalId $pid -roleName "Reader" -scope "/subscriptions/$sub" -justification "Maintenance completed"
 
-    Deactivates with custom justification.
+    Stops with custom justification.
     .Link
     https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-resource-roles-activate-your-roles#deactivate-a-role-assignment
     .Notes
@@ -30,7 +30,7 @@
     Homepage: https://github.com/kayasax/EasyPIM
 #>
 
-function Remove-PIMAzureRoleAssignmentScheduleRequest {
+function Stop-PIMAzureEligibleRoleAssignment {
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
     param (

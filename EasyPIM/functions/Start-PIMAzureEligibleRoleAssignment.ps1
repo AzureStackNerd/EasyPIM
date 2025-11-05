@@ -1,8 +1,8 @@
 ﻿<#
     .Synopsis
-    Creates a new PIM Azure role assignment schedule request.
+    Starts an eligible PIM Azure role assignment.
     .Description
-    Submits a request to schedule a PIM Azure role assignment for an eligible principal at the specified scope. Returns the API response object on success.
+    Submits a request to start (activate) an eligible PIM Azure role assignment for the specified principal at the given scope. Returns the API response object on success.
     .Parameter tenantID
     EntraID tenant ID (Mandatory)
     .Parameter principalId
@@ -16,13 +16,13 @@
     .Parameter justification
     The justification for the role activation request (optional, default: "Activating role for planned maintenance")
     .Example
-    PS> New-PIMAzureRoleAssignmentScheduleRequest -tenantID $tid -principalId $pid -roleName "Contributor" -scope "/subscriptions/$sub"
+    PS> Start-PIMAzureEligibleRoleAssignment -tenantID $tid -principalId $pid -roleName "Contributor" -scope "/subscriptions/$sub"
 
-    Creates a new PIM role assignment schedule request for the specified principal with Contributor role at the subscription scope.
+    Starts the eligible PIM role assignment for the specified principal with Contributor role at the subscription scope.
     .Example
-    PS> New-PIMAzureRoleAssignmentScheduleRequest -tenantID $tid -principalId $pid -roleName "Reader" -scope "/subscriptions/$sub" -duration "PT2H" -justification "Emergency access needed"
+    PS> Start-PIMAzureEligibleRoleAssignment -tenantID $tid -principalId $pid -roleName "Reader" -scope "/subscriptions/$sub" -duration "PT2H" -justification "Emergency access needed"
 
-    Creates a request with custom duration and justification.
+    Starts with custom duration and justification.
     .Link
     https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-resource-roles-activate-your-roles
     .Notes
@@ -30,7 +30,7 @@
     Homepage: https://github.com/kayasax/EasyPIM
 #>
 
-function New-PIMAzureRoleAssignmentScheduleRequest {
+function Start-PIMAzureEligibleRoleAssignment {
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
     param (

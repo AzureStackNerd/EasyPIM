@@ -59,6 +59,6 @@ Export-ModuleMember -Function @(
     'Deny-PIMGroupPendingApproval',
     'Copy-PIMAzureResourceEligibleAssignment',
     'Copy-PIMEntraRoleEligibleAssignment',
-    'New-PIMAzureRoleAssignmentScheduleRequest',
-    'Remove-PIMAzureRoleAssignmentScheduleRequest'
+    'Start-PIMAzureEligibleRoleAssignment',
+    'Stop-PIMAzureEligibleRoleAssignment'
 ) -Alias @() -Variable @()
