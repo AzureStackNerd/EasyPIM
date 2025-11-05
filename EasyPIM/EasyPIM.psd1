@@ -86,7 +86,9 @@ FunctionsToExport = @(
     'Approve-PIMGroupPendingApproval',
     'Deny-PIMGroupPendingApproval',
     'Copy-PIMAzureResourceEligibleAssignment',
-    'Copy-PIMEntraRoleEligibleAssignment'
+    'Copy-PIMEntraRoleEligibleAssignment',
+    'New-PIMAzureRoleAssignmentScheduleRequest',
+    'Remove-PIMAzureRoleAssignmentScheduleRequest'
     # Note: Orchestration (EPO*) functions are owned by EasyPIM.Orchestrator
 )
 
