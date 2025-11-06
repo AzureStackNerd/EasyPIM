@@ -81,7 +81,7 @@ function Start-PIMAzureEligibleRoleAssignment {
         if (-not $principalId) {
             $ctx = Get-AzContext
             $accountType = $ctx.Account.Type
-            if ($accountType -eq "ServicePrincipal") {
+            if ($accountType -ne "User") {
                 # $clientId = $env:servicePrincipalId
                 # $sp = Get-AzADServicePrincipal -ApplicationId $clientId
                 $principalId = $ctx.Account.Id
