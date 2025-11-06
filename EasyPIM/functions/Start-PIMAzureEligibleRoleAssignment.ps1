@@ -82,9 +82,11 @@ function Start-PIMAzureEligibleRoleAssignment {
             $ctx = Get-AzContext
             $accountId = $ctx.Account.Id
             if ($accountId.Split('@')[1] -eq $tenantID) {
-                $principalId = $accountId.Split('@')[0]
-
-            } else {
+                $clientId = $accountId.Split('@')[0]
+                $sp = Get-AzADServicePrincipal -ApplicationId $clientId
+                $principalId = $sp.Id
+            }
+            else {
                 $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
             }
         }
