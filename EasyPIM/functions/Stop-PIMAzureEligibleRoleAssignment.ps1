@@ -82,9 +82,9 @@ function Stop-PIMAzureEligibleRoleAssignment {
             $ctx = Get-AzContext
             $accountType = $ctx.Account.Type
             if ($accountType -ne "User") {
-                # $clientId = $env:servicePrincipalId
-                # $sp = Get-AzADServicePrincipal -ApplicationId $clientId
-                $principalId = $ctx.Account.Id
+                $clientId =  $ctx.Account.Id
+                $sp = Get-AzADServicePrincipal -ApplicationId $clientId
+                $principalId = $sp.Id
             }
             else {
                 $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
