@@ -34,11 +34,10 @@ function Stop-PIMAzureEligibleRoleAssignment {
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter()]
         [String]
         $tenantID,
-        [Parameter(Mandatory = $true)]
-        [ValidatePattern('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')]
+        [Parameter()]
         [String]
         $principalId,
         [Parameter(Mandatory = $true)]
@@ -69,8 +68,22 @@ function Stop-PIMAzureEligibleRoleAssignment {
     )
 
     try {
-        $script:tenantID = $tenantID
+        if (-not (Get-AzContext -ErrorAction SilentlyContinue) ) {
+            throw "No Az context found. Please connect to Azure using Connect-AzAccount."
+        }
 
+        if (-not $tenantID) {
+            $tenantID = (Get-AzContext).Tenant.Id
+            Write-Verbose "Using tenantID from current Az context: $tenantID"
+        }
+        if (-not $principalId) {
+            $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
+        }
+        if ($principalId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+            throw "principalId must be a valid GUID."
+        }
+
+        $script:tenantID = $tenantID
         $armEndpoint = Get-PIMAzureEnvironmentEndpoint -EndpointType 'ARM'
 
         # Fetch role definition ID

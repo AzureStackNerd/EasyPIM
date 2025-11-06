@@ -34,11 +34,10 @@ function Start-PIMAzureEligibleRoleAssignment {
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter()]
         [String]
         $tenantID,
-        [Parameter(Mandatory = $true)]
-        [ValidatePattern('^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')]
+        [Parameter()]
         [String]
         $principalId,
         [Parameter(Mandatory = $true)]
@@ -46,22 +45,24 @@ function Start-PIMAzureEligibleRoleAssignment {
         $roleName,
         [Parameter(Mandatory = $true)]
         [ValidateScript({
-            if ($_ -match '^/(subscriptions|providers/Microsoft\.Management/managementGroups)/') {
-                $true
-            } else {
-                throw "Scope must be a valid Azure resource scope starting with /subscriptions/ or /providers/Microsoft.Management/managementGroups/"
-            }
-        })]
+                if ($_ -match '^/(subscriptions|providers/Microsoft\.Management/managementGroups)/') {
+                    $true
+                }
+                else {
+                    throw "Scope must be a valid Azure resource scope starting with /subscriptions/ or /providers/Microsoft.Management/managementGroups/"
+                }
+            })]
         [String]
         $scope,
         [ValidateScript({
-            try {
-                [Xml.XmlConvert]::ToTimeSpan($_) | Out-Null
-                $true
-            } catch {
-                throw "Duration must be a valid ISO 8601 duration format (e.g., PT1H, PT30M)."
-            }
-        })]
+                try {
+                    [Xml.XmlConvert]::ToTimeSpan($_) | Out-Null
+                    $true
+                }
+                catch {
+                    throw "Duration must be a valid ISO 8601 duration format (e.g., PT1H, PT30M)."
+                }
+            })]
         [String]
         $duration = "PT1H",
         [String]
@@ -69,8 +70,23 @@ function Start-PIMAzureEligibleRoleAssignment {
     )
 
     try {
-        $script:tenantID = $tenantID
+        if (-not (Get-AzContext -ErrorAction SilentlyContinue) ) {
+            throw "No Az context found. Please connect to Azure using Connect-AzAccount."
+        }
 
+        if (-not $tenantID) {
+            $tenantID = (Get-AzContext).Tenant.Id
+            Write-Verbose "Using tenantID from current Az context: $tenantID"
+        }
+        if (-not $principalId) {
+            $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
+        }
+        if ($principalId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+            throw "principalId must be a valid GUID."
+        }
+
+
+        $script:tenantID = $tenantID
         $armEndpoint = Get-PIMAzureEnvironmentEndpoint -EndpointType 'ARM'
 
         # Fetch role definition ID
