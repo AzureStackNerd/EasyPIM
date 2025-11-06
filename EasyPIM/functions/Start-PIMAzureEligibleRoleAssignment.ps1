@@ -79,10 +79,8 @@ function Start-PIMAzureEligibleRoleAssignment {
             Write-Verbose "Using tenantID from current Az context: $tenantID"
         }
         if (-not $principalId) {
-            $ctx = Get-AzContext
-            $accountId = $ctx.Account.Id
-            if ($accountId.Split('@')[1] -eq $tenantID) {
-                $clientId = $accountId.Split('@')[0]
+            if ($env:servicePrincipalId) {
+                $clientId = $env:servicePrincipalId
                 $sp = Get-AzADServicePrincipal -ApplicationId $clientId
                 $principalId = $sp.Id
             }

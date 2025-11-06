@@ -45,22 +45,24 @@ function Stop-PIMAzureEligibleRoleAssignment {
         $roleName,
         [Parameter(Mandatory = $true)]
         [ValidateScript({
-            if ($_ -match '^/(subscriptions|providers/Microsoft\.Management/managementGroups)/') {
-                $true
-            } else {
-                throw "Scope must be a valid Azure resource scope starting with /subscriptions/ or /providers/Microsoft.Management/managementGroups/"
-            }
-        })]
+                if ($_ -match '^/(subscriptions|providers/Microsoft\.Management/managementGroups)/') {
+                    $true
+                }
+                else {
+                    throw "Scope must be a valid Azure resource scope starting with /subscriptions/ or /providers/Microsoft.Management/managementGroups/"
+                }
+            })]
         [String]
         $scope,
         [ValidateScript({
-            try {
-                [Xml.XmlConvert]::ToTimeSpan($_) | Out-Null
-                $true
-            } catch {
-                throw "Duration must be a valid ISO 8601 duration format (e.g., PT1H, PT30M)."
-            }
-        })]
+                try {
+                    [Xml.XmlConvert]::ToTimeSpan($_) | Out-Null
+                    $true
+                }
+                catch {
+                    throw "Duration must be a valid ISO 8601 duration format (e.g., PT1H, PT30M)."
+                }
+            })]
         [String]
         $duration = "PT1H",
         [String]
@@ -77,14 +79,13 @@ function Stop-PIMAzureEligibleRoleAssignment {
             Write-Verbose "Using tenantID from current Az context: $tenantID"
         }
         if (-not $principalId) {
-            $ctx = Get-AzContext
-            $accountId = $ctx.Account.Id
-            if ($accountId.Split('@')[1] -eq $tenantID) {
-                $clientId = $accountId.Split('@')[0]
+            if ($env:servicePrincipalId) {
+                $clientId = $env:servicePrincipalId
                 $sp = Get-AzADServicePrincipal -ApplicationId $clientId
                 $principalId = $sp.Id
 
-            } else {
+            }
+            else {
                 $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
             }
         }
@@ -107,7 +108,7 @@ function Stop-PIMAzureEligibleRoleAssignment {
         if ($roleActiveAssignment) {
             $currentTime = (Get-Date -AsUTC)
             $starttimePlus5Min = $roleActiveAssignment.startDateTime.AddMinutes(5)
-            if  ($currentTime -lt $starttimePlus5Min) {
+            if ($currentTime -lt $starttimePlus5Min) {
                 Write-Warning "The role assignment was started less than 5 minutes ago. Deactivation may fail due to PIM constraints."
                 $timeDifference = $starttimePlus5Min - $currentTime
                 Write-Warning "Waiting for $($timeDifference.TotalSeconds + 10) seconds before proceeding with deactivation..."
