@@ -83,6 +83,15 @@ function Stop-PIMAzureEligibleRoleAssignment {
         $response = Invoke-ARM -restURI $restURI -method get
         $roleActiveAssignment = $response.value.properties | Where-Object { $_.AssignmentType -eq "activated" -and $_.principalId -eq "$principalId" -and $_.roleDefinitionId.Split("/")[-1] -eq "$roleDefinitionId" -and $_.scope -eq "$scope" } | Select-Object -First 1
         if ($roleActiveAssignment) {
+            $currentTime = (Get-Date -AsUTC)
+            $starttimePlus5Min = $roleActiveAssignment.startDateTime.AddMinutes(5)
+            if  ($currentTime -lt $starttimePlus5Min) {
+                Write-Warning "The role assignment was started less than 5 minutes ago. Deactivation may fail due to PIM constraints."
+                $timeDifference = $starttimePlus5Min - $currentTime
+                Write-Warning "Waiting for $($timeDifference.TotalSeconds + 10) seconds before proceeding with deactivation..."
+                Start-Sleep -Seconds ($timeDifference.TotalSeconds + 10)
+
+            }
             $reqId = (New-Guid).Guid
             $restURI = "$($armEndpoint.TrimEnd('/'))$scope/providers/Microsoft.Authorization/roleAssignmentScheduleRequests/$($reqId)?api-version=2020-10-01-preview"
             $linkedRoleEligibilityScheduleId = $roleActiveAssignment.linkedRoleEligibilityScheduleInstanceId.Split("/")[-1]
