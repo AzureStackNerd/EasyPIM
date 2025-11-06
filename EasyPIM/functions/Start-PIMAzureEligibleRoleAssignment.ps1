@@ -85,6 +85,7 @@ function Start-PIMAzureEligibleRoleAssignment {
                 $clientId = $ctx.Account.Id
                 $sp = Get-AzADServicePrincipal -ApplicationId $clientId
                 $principalId = $sp.Id
+                Write-Warning "principalId was not provided. Using service principal object ID: $principalId"
             }
             else {
                 $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
