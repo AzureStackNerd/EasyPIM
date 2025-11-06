@@ -83,10 +83,9 @@ function Stop-PIMAzureEligibleRoleAssignment {
             $accountType = $ctx.Account.Type
             if ($accountType -ne "User") {
                 $clientId = $ctx.Account.Id
-                # $sp = Get-AzADApplication -ApplicationId $clientId
                 $sp = Get-AzADServicePrincipal -ApplicationId $clientId
                 $principalId = $sp.Id
-                # Write-Warning "principalId was not provided. Using service principal object ID: $($principalId.Replace('-','').ToUpper())"
+                Write-Warning "Applications cannot be assigned a EntraID P2 license (yet). Please use a UserID"
             }
             else {
                 $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
