@@ -79,7 +79,14 @@ function Start-PIMAzureEligibleRoleAssignment {
             Write-Verbose "Using tenantID from current Az context: $tenantID"
         }
         if (-not $principalId) {
-            $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
+            $ctx = Get-AzContext
+            $accountId = $ctx.Account.Id
+            if ($accountId.Split('@')[1] -eq $tenantID) {
+                $principalId = $accountId.Split('@')[0]
+
+            } else {
+                $principalId = (Get-AzContext).Account.ExtendedProperties['HomeAccountId'].Split('.')[0]
+            }
         }
         if ($principalId -notmatch '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
             throw "principalId must be a valid GUID."
