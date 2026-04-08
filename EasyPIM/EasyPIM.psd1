@@ -6,7 +6,7 @@
 RootModule = 'EasyPIM.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.0.24'
+ModuleVersion = '2.2.2'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -24,7 +24,7 @@ Author = 'Loïc MICHEL'
 Copyright = '(c) loicmichel. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Manage PIM Azure Resource, PIM Entra role and PIM for Group settings and assignments with simplicity in mind'
+Description = 'EasyPIM simplifies Microsoft PIM management by abstracting complex Graph and ARM APIs into intuitive PowerShell cmdlets. Overcome portal limitations with bulk operations, export/import policies across tenants, manage Azure RBAC and Entra roles using friendly role names instead of GUIDs, track changes with interactive HTML reports, and automate what the portal cannot. One unified module for Azure Resources, Entra Roles, and PIM Groups—built for ease and automation at scale.'
 
 # Script files (.ps1) that are run in the caller's environment prior to importing this module.
 # ScriptsToProcess intentionally left empty to simplify CI import path
@@ -119,13 +119,13 @@ PrivateData = @{
         # Prerelease = 'beta1'
 
         # Tags applied to this module. These help with module discovery in online galleries.
-        Tags = @("Azure","PIM","EntraID","PrivilegedIdentityManagement")
+        Tags = @("Azure","PIM","EntraID","PrivilegedIdentityManagement","RBAC","AzureAD","Identity","Security","Governance","Compliance","ARM","Graph")
 
         # A URL to the license for this module.
         LicenseUri = 'https://github.com/kayasax/EasyPIM/blob/main/LICENSE'
 
         # A URL to the main website for this project.
-        ProjectUri = 'https://github.com/kayasax/EasyPIM/'
+        ProjectUri = 'https://kayasax.github.io/EasyPIM/'
 
         # A URL to an icon representing this module.
         # IconUri = ''
@@ -163,6 +163,15 @@ PrivateData = @{
 
     # Appended in 2.0.2 and 2.0.3
     AdditionalReleaseNotes = @'
+    2.0.31 (2025-10-11)
+    - Added Resolve-EasyPIMDirectoryScope helper to normalize tenant, GUID, full path, or display-name scopes.
+    - Restored Administrative Unit cleanup support for removal cmdlets with AU GUID or display name resolution.
+
+    2.0.30 (2025-10-11)
+    - Hardened Test-PIMPolicyBusinessRules to remove conflicting AuthenticationContext requirements.
+    - Updated Test-EasyPIMConfigurationValidity to surface invalid activation requirements before deployment.
+    - Improved assignment validation to require both scope and role when matching Azure role entries.
+
     2.0.3 (2025-08-29)
     - Stable release polish: removed prerelease references; validated end-to-end scenario passes
     - E2E test improvements: auto-connect to Graph/Az, comprehensive policy options exercise (Step 14)
@@ -173,6 +182,11 @@ PrivateData = @{
     - Drift detection aligned with policy-setting logic; PSCustomObject normalization
     - Fixed parameter parsing for requirements and booleans; improved Approver handling
     - Added end-to-end tests; lint fixes (trailing spaces); minor robustness improvements
+
+    2.0.29 (2025-10-10)
+    - Added principalName resolution and output across all New-/Remove- assignment cmdlets (Azure resource, Entra role, and group)
+    - Introduced shared Resolve-EasyPIMPrincipal helper for consistent Graph lookups
+    - Updated comment-based help and fast test coverage to reflect new parameter sets
 '@
 
     # AdditionalReleaseNotes of this module
@@ -193,7 +207,7 @@ PrivateData = @{
 } # End of PrivateData hashtable
 
 # HelpInfo URI of this module
-HelpInfoURI = 'https://github.com/kayasax/EasyPIM/wiki/Documentation'
+HelpInfoURI = 'https://kayasax.github.io/EasyPIM/'
 
 # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
 # DefaultCommandPrefix = ''

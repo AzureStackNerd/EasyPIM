@@ -7,6 +7,182 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [EasyPIM.Orchestrator 1.5.1] - 2026-02-13
+
+### Fixed
+- **Test-PIMPolicyDrift**: Fixed fallback logic incorrectly handling `AzureRoles.Policies` in array format. The code was iterating array metadata properties (Count, Length, IsFixedSize, etc.) instead of actual role entries when `Initialize-EasyPIMPolicies` failed and fell back to local parsing.
+  - **Root Cause**: Fallback logic assumed `AzureRoles.Policies` was always a dictionary/object format and directly iterated `PSObject.Properties` without checking if it was an array first.
+  - **Fix**: Added array format detection to match the existing logic for `EntraRoles.Policies` and `Groups.Policies`, ensuring proper handling of both array and dictionary configuration formats.
+  - **Impact**: Users with array-formatted `AzureRoles.Policies` configurations will no longer see errors like "Missing Scope" for system properties.
+
+## [EasyPIM Core 2.2.2] - 2026-01-12
+
+### Fixed
+- **Issue #255**: Fixed `Invoke-ARM` failing with "A parameter cannot be found that matches parameter name 'SubscriptionId'" when a SubscriptionId is provided.
+  - **Root Cause**: The internal call to `Get-AzContext` was using the nonexistent parameter `-SubscriptionId`.
+  - **Fix**: Replaced the invalid call with `Get-AzContext -List | Where-Object { $_.Subscription.Id -eq $SubscriptionId }`.
+
+## [EasyPIM Core 2.2.1] - 2025-12-28
+
+### Fixed
+- **Issue #245**: Fixed a bug in `Copy-PIMEntraRolePolicy` where empty requirements ("None") were not clearing existing settings on the target role.
+  - **Root Cause**: `Import-EntraRoleSettings` was skipping the update call if the requirements list was empty, causing the target role to retain its previous configuration.
+  - **Fix**: Updated logic to always apply requirements, even if empty, ensuring that "None" is correctly propagated.
+
+## [EasyPIM.Orchestrator 1.5.0] - 2025-12-28
+
+### Added
+- **Rich Return Object**: `Invoke-EasyPIMOrchestrator` now returns a detailed `PSCustomObject` containing success status, policy results, assignment results, and cleanup analysis.
+- **Cleanup Analysis**: `initial` mode now performs and displays a full cleanup analysis (showing exactly what would be removed) even in `WhatIf` mode.
+- **Performance**: Implemented batch pre-fetching for assignments, significantly reducing Graph/ARM API calls during validation.
+
+### Changed
+- **Drift Output**: `WhatIf` output now explicitly reports "⚠️ [DRIFT]" instead of "✅ [OK]" when policy drift is detected.
+- **Assignment Logging**: "Planned" assignments are now clearly distinguished from "Existing" ones in the summary.
+- **Idempotency**: Improved logic to correctly identify existing assignments in `WhatIf` mode.
+
+## [EasyPIM Core 2.2.0] - 2025-12-28
+
+### Changed
+- **Synchronized Release**: Version bump to align with EasyPIM.Orchestrator 1.5.0 performance and feature updates.
+
+## [EasyPIM.Orchestrator 1.4.12] - 2025-12-21
+
+### Fixed
+- **Drift Detection**: Fixed a bug in `Test-PIMPolicyDrift` where policy entries were duplicated in the output if the primary logic failed after partial processing. The fallback logic now correctly clears previous results before running. Fixes #243.
+
+## [EasyPIM.Orchestrator 1.4.11] - 2025-12-21
+
+### Fixed
+- **Drift Detection**: Fixed a bug in `Test-PIMPolicyDrift` where boolean values in policies were incorrectly flagged as drift when compared against string representations (e.g., "False" vs $false). Fixes #242.
+
+### Fixed
+- **Issue #239**: MFA requirement on active assignments now properly preserved during `Copy-PIMEntraRolePolicy` operations
+  - **Root Cause**: `Import-EntraRoleSettings` and `Set-ActiveAssignmentRequirement` were incorrectly filtering out `MultiFactorAuthentication` from `ActiveAssignmentRequirement` (Rule #7: `Enablement_Admin_Assignment`)
+  - **Corrected Understanding**: Old code comment incorrectly stated "no MFA on Admin assignment" - Microsoft Graph API Rule #7 DOES support MFA on active assignments
+  - **Fix Applied**: Added `'MultiFactorAuthentication'` to allowed admin enablement rules for Rule #7
+  - **Additional Correction**: Removed `'Ticketing'` from Rule #7 allowed values - Ticketing is only supported for Rule #2 (`Enablement_EndUser_Assignment` - end-user activation), not Rule #7 (admin assignment)
+  - **Rule #7 Valid Values**: `Justification`, `MultiFactorAuthentication` (per Microsoft Graph API specification)
+  - **Updated Documentation**: Clarified function help to distinguish Rule #2 (activation) vs Rule #7 (active assignment)
+  - **Reference**: [Microsoft Docs - PIM Rules Mapping](https://learn.microsoft.com/en-us/graph/identity-governance-pim-rules-overview#assignment-rules) (Rule #7: Enablement_Admin_Assignment)
+  - **Impact**: Security settings now properly copied between roles; MFA requirements no longer silently dropped
+  - **Testing**: Added comprehensive regression test suite with 5 test cases; verified RED→GREEN TDD cycle
+  - **Reported by**: @artorro
+
+## [EasyPIM Core 2.0.41] - 2025-11-11
+
+### Fixed
+- **Approver Type Case-Insensitivity**: Approver `Type` parameter now accepts case-insensitive values ("user"/"User", "group"/"Group"). ARM API previously rejected lowercase values with 400 Bad Request. Fixes #218.
+
+### Enhanced
+- **Documentation**: Updated all Set-PIM*Policy functions to clarify that approver Type is case-insensitive in examples and parameter descriptions.
+
+## [EasyPIM Core 2.0.40] - 2025-11-11
+
+### Fixed
+- **Backup Resilience**: `Backup-PIMAzureResourcePolicy` now gracefully handles 404 errors when custom roles have PIM policies at child scopes (e.g., resource groups). Emits warning and continues backup instead of failing. Fixes #223.
+
+## [EasyPIM Core 2.0.39] - 2025-11-11
+
+### Enhanced
+- **Package Metadata**: Updated ProjectUri to GitHub Pages documentation site (https://kayasax.github.io/EasyPIM/)
+- **Discoverability**: Enhanced module descriptions emphasizing ease of use, automation capabilities, and overcoming portal/API limitations
+- **Tags**: Added comprehensive tags for better PowerShell Gallery discovery (RBAC, Identity, Security, Governance, Compliance, ARM, Graph)
+
+## [EasyPIM.Orchestrator 1.4.10] - 2025-11-11
+
+### Enhanced
+- **Graph Scope Optimization**: Graph authentication now only required for Entra/Group operations, not Azure-only operations. Contributed by @AzureStackNerd (PR #225).
+- **Package Metadata**: Enhanced description highlighting PIM-as-Code, configuration-driven deployment, and drift detection capabilities
+- **Tags**: Added PIM-as-Code, GitOps, Infrastructure-as-Code, Automation, Configuration-Management tags
+
+## [EasyPIM Core 2.0.38] - 2025-11-11
+
+### Fixed
+- **Report Accuracy**: Fixed unique users count in PIM activity reports to use `initiatedBy` property instead of `requestor`, resolving discrepancy with top requestors display.
+
+## [EasyPIM Core 2.0.37] - 2025-11-11
+
+### Added
+- **Report Navigation**: Added fixed sidebar navigation with jump links to report sections (Summary, Categories, Results, Activity, Requestors, Azure Roles, Entra Roles)
+- **PDF Export**: Added one-click PDF export button using browser print functionality
+- **Print-Friendly CSS**: Enhanced report template with print-optimized styling (page-break-inside: avoid, hidden navigation)
+
+## [EasyPIM Core 2.0.35] - 2025-11-11
+
+### Fixed
+- **Module Loading Architecture**: Removed all internal function dot-sourcing to support build process concatenation
+- **Template Path Resolution**: Fixed template path logic to work in both source and built module scenarios
+- **Build Compatibility**: Ensured helper functions in `internal/functions/` auto-load without explicit dot-sourcing
+
+## [EasyPIM Core 2.0.33] - 2025-11-11
+
+### Fixed
+- **Module Structure**: Moved internal helper functions from `internal/` to `internal/functions/` for proper auto-loading in built modules
+- **Function Loading**: Resolved module import issues where internal functions were not available after publish
+
+## [EasyPIM Core 2.0.32] - 2025-11-11
+
+### Added
+- **Report Branding**: Added EasyPIM logo display in report header and footer with brightness enhancement for dark backgrounds
+- **Date Range Display**: Added date filtering information when StartDate/EndDate parameters used in reports
+
+### Fixed
+- **Documentation URLs**: Corrected all documentation links to point to GitHub Pages site
+- **Code Quality**: Achieved 100% PSScriptAnalyzer compliance (7,018 tests passing)
+- **Unused Code Cleanup**: Removed ~94 lines of unused variables from pre-refactor code in Show-PIMReport
+
+## [EasyPIM Core 2.0.31] - 2025-10-11
+
+### Fixed
+- Restored Administrative Unit scope support for `Remove-PIMEntraRoleActiveAssignment` and `Remove-PIMEntraRoleEligibleAssignment` by honoring the provided `Scope` (tenant, GUID, display name, or full path) when building removal requests.
+
+## [EasyPIM Core 2.0.30] - 2025-10-11
+
+### Fixed
+- Hardened `Test-PIMPolicyBusinessRules` to strip conflicting AuthenticationContext entries from activation requirement arrays.
+- Updated `Test-EasyPIMConfigurationValidity` to surface invalid activation requirements before deployment and align template normalization with runtime behavior.
+
+### Improved
+- Assignment validation now requires both scope and role when checking existing Azure entries, preventing status strings from blocking new assignments.
+
+## [EasyPIM.Orchestrator 1.4.9] - 2025-10-13
+
+### Added
+- `Invoke-EasyPIMOrchestrator` now supports `-ProtectedRoleOverrideToken`, enabling CI pipelines to acknowledge protected-role policy updates without interactive prompts.
+
+### Improved
+- Startup/completion telemetry records whether the override token was provided, giving auditors visibility into protected-role automation runs.
+- Added Pester coverage ensuring the override token path bypasses `Read-Host` only with the correct confirmation value.
+
+## [EasyPIM.Orchestrator 1.4.8] - 2025-10-13
+
+### Fixed
+- `Set-EPOEntraRolePolicy` now permanently bypasses Global Administrator policy automation with explicit safety messaging and manual-management guidance.
+
+### Improved
+- `Invoke-EasyPIMOrchestrator` highlights Global Administrator policy entries during runs so operators know they remain untouched as break-glass roles.
+- Added targeted unit coverage to guard protected-role override behavior against regressions.
+
+## [EasyPIM.Orchestrator 1.4.7] - 2025-10-11
+
+### Fixed
+- Azure assignment pre-checks ignore status-only strings and enforce scope + role matches before skipping creations.
+- `Test-EasyPIMConfigurationValidity` removes stray AuthenticationContext activation requirements that would fail during deployment.
+
+### Changed
+- `Test-PIMPolicyDrift` reuses orchestrator normalization when available so drift detection mirrors live execution.
+
+## [EasyPIM.Orchestrator 1.4.5] - 2025-10-08
+
+### Added
+- Support array-based policy definitions for Azure, Entra, and group roles with template override handling.
+- Added dedicated documentation and sample configuration for the new array-based policy format.
+
+### Fixed
+- `Test-PIMPolicyDrift` now compares template-based policies using the resolved policy payload generated by the orchestrator, restoring drift accuracy.
+- Removed trailing whitespace flagged by FileIntegrity tests to keep module validation clean.
+
 ## [EasyPIM.Orchestrator 1.2.0] - 2025-09-03
 
 ### 🚨 Critical

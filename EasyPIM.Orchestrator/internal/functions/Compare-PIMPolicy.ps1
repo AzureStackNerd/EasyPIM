@@ -15,7 +15,7 @@ function ConvertTo-BooleanString {
 	#>
 	param([object]$Value)
 
-	if ($null -eq $Value -or $Value -eq '' -or $Value -eq 'None') {
+	if ($null -eq $Value) {
 		return 'false'
 	}
 
@@ -25,7 +25,12 @@ function ConvertTo-BooleanString {
 	}
 
 	# Handle string representations
-	$stringValue = "$Value".ToLower().Trim()
+	$stringValue = "$Value".Trim()
+	if ($stringValue -eq '' -or $stringValue -eq 'None') {
+		return 'false'
+	}
+
+	$stringValue = $stringValue.ToLower()
 	if ($stringValue -in @('true', '1', 'yes', 'on', 'enabled')) {
 		return 'true'
 	}
@@ -97,7 +102,16 @@ function Compare-PIMPolicy {
 		'MaximumEligibilityDuration',
 		'AllowPermanentEligibility',
 		'MaximumActiveAssignmentDuration',
-		'AllowPermanentActiveAssignment'
+		'AllowPermanentActiveAssignment',
+		'Notification_EligibleAssignment_Alert',
+		'Notification_EligibleAssignment_Assignee',
+		'Notification_EligibleAssignment_Approver',
+		'Notification_ActiveAssignment_Alert',
+		'Notification_ActiveAssignment_Assignee',
+		'Notification_ActiveAssignment_Approver',
+		'Notification_Activation_Alert',
+		'Notification_Activation_Assignee',
+		'Notification_Activation_Approver'
 	)
 
 	# Mapping from config names to live policy property names
@@ -105,6 +119,15 @@ function Compare-PIMPolicy {
 		'ActivationRequirement' = 'EnablementRules'
 		'MaximumEligibilityDuration' = 'MaximumEligibleAssignmentDuration'
 		'AllowPermanentEligibility' = 'AllowPermanentEligibleAssignment'
+		'Notification_EligibleAssignment_Alert' = 'Notification_Eligibility_Alert_Recipients'
+		'Notification_EligibleAssignment_Assignee' = 'Notification_Eligibility_Assignee_Recipients'
+		'Notification_EligibleAssignment_Approver' = 'Notification_Eligibility_Approvers_Recipients'
+		'Notification_ActiveAssignment_Alert' = 'Notification_Active_Alert_Recipients'
+		'Notification_ActiveAssignment_Assignee' = 'Notification_Active_Assignee_Recipients'
+		'Notification_ActiveAssignment_Approver' = 'Notification_Active_Approvers_Recipients'
+		'Notification_Activation_Alert' = 'Notification_Activation_Alert_Recipients'
+		'Notification_Activation_Assignee' = 'Notification_Activation_Assignee_Recipients'
+		'Notification_Activation_Approver' = 'Notification_Activation_Approver_Recipients'
 	}
 
 	$differences = @()
@@ -130,6 +153,31 @@ function Compare-PIMPolicy {
 			}
 			if ($liveValue -is [System.Collections.IEnumerable] -and -not ($liveValue -is [string])) {
 				$liveValue = ($liveValue | ForEach-Object { "$_" }) -join ','
+			}
+
+			# Special handling for notification fields
+			if ($field -like 'Notification_*') {
+				# Expected value should be a hashtable with Recipients array
+				if ($expectedValue -is [hashtable] -and $expectedValue.Recipients) {
+					$expectedRecipients = $expectedValue.Recipients
+					if ($expectedRecipients -is [System.Collections.IEnumerable] -and -not ($expectedRecipients -is [string])) {
+						$expectedValue = ($expectedRecipients | ForEach-Object { "$_" }) -join ','
+					} else {
+						$expectedValue = [string]$expectedRecipients
+					}
+				} elseif ($expectedValue -is [pscustomobject] -and $expectedValue.PSObject.Properties['Recipients']) {
+					$expectedRecipients = $expectedValue.Recipients
+					if ($expectedRecipients -is [System.Collections.IEnumerable] -and -not ($expectedRecipients -is [string])) {
+						$expectedValue = ($expectedRecipients | ForEach-Object { "$_" }) -join ','
+					} else {
+						$expectedValue = [string]$expectedRecipients
+					}
+				}
+				# Live value should be a comma-separated string - ensure it's a string
+				if ($liveValue -is [System.Collections.IEnumerable] -and -not ($liveValue -is [string])) {
+					$liveValue = ($liveValue | ForEach-Object { "$_" }) -join ','
+				}
+				$liveValue = [string]$liveValue
 			}
 
 			# Special handling for activation requirements
@@ -238,5 +286,6 @@ function Compare-PIMPolicy {
 		Target = $ExtraId
 		Status = $status
 		Differences = ($differences -join '; ')
+		DifferencesList = $differences
 	}
 }

@@ -1,11 +1,11 @@
 @{
     RootModule        = 'EasyPIM.Orchestrator.psm1'
-    ModuleVersion = '1.4.1'
+    ModuleVersion = '1.5.1'
     GUID              = 'b6f9b3c9-bc6a-4d4b-8c51-7c45d42157cd'
     Author            = 'Loïc MICHEL'
     CompanyName       = 'EasyPIM'
     Copyright         = '(c) Loïc MICHEL. All rights reserved.'
-    Description       = 'Orchestrator for EasyPIM (Invoke-EasyPIMOrchestrator)'
+    Description       = 'PIM-as-Code orchestration for EasyPIM. Deploy role policies and assignments from JSON configuration files with WhatIf validation, delta mode for incremental changes, and drift detection. Automate PIM governance across Azure Resources, Entra Roles, and PIM Groups with reusable templates, CI/CD integration, and comprehensive audit trails. Turn configuration files into enforceable PIM state.'
     PowerShellVersion = '5.1'
 
     # Required modules including stable EasyPIM core dependency
@@ -26,41 +26,20 @@
     AliasesToExport   = @()
     CmdletsToExport   = @()
     PrivateData       = @{ PSData =@{
-        Tags = @('EasyPIM','Orchestrator')
-        ProjectUri = 'https://github.com/kayasax/EasyPIM'
+        Tags = @('EasyPIM','Orchestrator','PIM-as-Code','Infrastructure-as-Code','GitOps','Automation','Drift-Detection','Configuration-Management','Azure','EntraID','RBAC','Governance')
+        ProjectUri = 'https://kayasax.github.io/EasyPIM/template-guide.html'
         LicenseUri = 'https://github.com/kayasax/EasyPIM/blob/main/LICENSE'
 ReleaseNotes = @'
-🚀 EasyPIM.Orchestrator v1.1.0 - Enhanced Stability Release
+EasyPIM.Orchestrator v1.5.1 - Bug Fix Release
 
-RECENT IMPROVEMENTS: Dependency optimization and reliability enhancements.
+Fixed
+- **Issue**: Fixed `Test-PIMPolicyDrift` fallback logic incorrectly handling `AzureRoles.Policies` in array format, which caused it to iterate array metadata properties (Count, Length, IsFixedSize) instead of actual role entries.
+  - **Root Cause**: Fallback logic assumed `AzureRoles.Policies` was always a dictionary/object format and directly iterated PSObject.Properties without checking if it was an array first.
+  - **Fix**: Added array format detection to match existing logic for `EntraRoles.Policies` and `Groups.Policies`, ensuring proper handling of both array and dictionary formats.
 
-✅ UPDATES IN v1.1.1:
-- 🆕 Template + Inline Override Merging: Full implementation of Issue #136 for all policy types
-- 🏗️ Code Architecture Refactoring: Extracted helper functions to internal modules for better maintainability
-- 🔍 Enhanced Drift Detection: Test-PIMPolicyDrift now uses orchestrator logic for consistency
-- 📚 Comprehensive Documentation: Updated step-by-step guide with template + override examples
-- ✅ Quality Standards: PSScriptAnalyzer compliant across all functions
-- 🔧 New Internal Functions: Remove-JsonComments, Get-ResolvedPolicyObject, Test-IsProtectedRole, Convert-RequirementValue, Compare-PIMPolicy, Resolve-PolicyTemplate
-
-✅ UPDATES IN v1.1.0:
-- Dependency optimization: Removed unnecessary Microsoft.Graph.Identity.Governance requirement
-- Enhanced module architecture with cleaner dependencies
-- Improved reliability with CI/CD gallery version checking
-- Support for protected roles override functionality (Issue #137)
-- Compatible with latest EasyPIM core v2.0.5
-
-✅ CORE FEATURES:
-- Complete PIM orchestration via Invoke-EasyPIMOrchestrator
-- Policy drift detection with Test-PIMPolicyDrift
-- Endpoint discovery with Test-PIMEndpointDiscovery
-- ARM API compatibility fixes for Azure resource roles
-- Parameter standardization: 'principalId' (with 'assignee' alias for compatibility)
-- Auto-configuration of permanent assignment flags based on duration specifications
-
-📋 REQUIREMENTS:
-- EasyPIM (latest stable version, automatically installed)
-- PowerShell 5.1+
-- Az.Accounts, Microsoft.Graph.Authentication modules
+Previous releases:
+v1.5.0 - Performance & Drift Detection Overhaul
+v1.4.12 - Fix Drift Detection
 '@
     } }
 }

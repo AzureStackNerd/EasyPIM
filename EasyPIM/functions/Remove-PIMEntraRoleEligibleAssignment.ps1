@@ -1,16 +1,18 @@
 ﻿<#
     .Synopsis
-    Create an active assignement at the provided scope
+    Remove an eligible assignment for the specified Entra role.
     .Description
-    Active assignment does not require users to activate their role. https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-resource-roles-assign-roles
+    Eligible assignments grant principals the ability to activate a role when needed. https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-resource-roles-assign-roles
     .Parameter tenantID
     EntraID tenant ID
     .Parameter subscriptionID
     subscription ID
-    .Parameter scope
-    use scope parameter if you want to work at other scope than a subscription
+    .Parameter Scope
+    Optional directory scope for the removal request. Provide '/' for tenant scope (default), an Administrative Unit GUID, display name, or a full path like '/administrativeUnits/<GUID>'.
     .Parameter principalID
     objectID of the principal (user, group or service principal)
+    .Parameter principalName
+    Display name, UPN, object ID, or appId of the principal. Will be resolved to principalID when provided.
     .Parameter rolename
     name of the role to assign
     .Parameter duration
@@ -24,13 +26,21 @@
 
 
     .Example
-    PS> New-PIMEntraRoleEligibleAssignment -tenantID $tenantID -subscriptionID $subscriptionId -rolename "AcrPush" -principalID 3604fe63-cb67-4b60-99c9-707d46ab9092  -startDateTime "2/2/2024 18:20"
+    PS> Remove-PIMEntraRoleEligibleAssignment -tenantID $tenantID -rolename "AcrPush" -principalID 3604fe63-cb67-4b60-99c9-707d46ab9092
 
-    Create an active assignment fot the role Arcpush, starting at a specific date and using default duration
+    Remove the eligible assignment for the role AcrPush and the specified principal ID.
 
-    PS> New-PIMEntraRoleEligibleAssignment -tenantID $tenantID -subscriptionID $subscriptionId -rolename "webmaster" -principalID 3604fe63-cb67-4b60-99c9-707d46ab9092 -justification 'TEST' -permanent
+    PS> Remove-PIMEntraRoleEligibleAssignment -tenantID $tenantID -rolename "Global Administrator" -principalName "user@contoso.com"
 
-    Create a permanent active assignement for the role webmaster
+    Resolve the principal name to its object ID and remove the eligible assignment for Global Administrator.
+
+    PS> Remove-PIMEntraRoleEligibleAssignment -tenantID $tenantID -rolename "Helpdesk Administrator" -principalId $principal.Id -Scope "e2a1d1b3-3a8a-4cc8-9ff6-8a90e2f17c11"
+
+    Remove the eligible assignment scoped to a specific Administrative Unit by supplying its GUID (translated to '/administrativeUnits/<GUID>').
+
+    PS> Remove-PIMEntraRoleEligibleAssignment -tenantID $tenantID -rolename "Helpdesk Administrator" -principalId $principal.Id -Scope "Sales Operations AU"
+
+    Remove the eligible assignment scoped to a specific Administrative Unit by referencing the AU display name; the name is resolved to its GUID automatically.
 
     .Link
     https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-resource-roles-assign-roles
@@ -40,35 +50,57 @@
 #>
 function Remove-PIMEntraRoleEligibleAssignment {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingWriteHost", "")]
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'ByPrincipalId')]
     param (
-        [Parameter(Position = 0, Mandatory = $true)]
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ByPrincipalId')]
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ByPrincipalName')]
         [String]
         # Entra ID tenantID
         $tenantID,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalId')]
         [String]
         # Principal ID
         $principalID,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalName')]
+        [String]
+        # Principal name or identifier
+        $principalName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalId')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalName')]
         [string]
         # the rolename for which we want to create an assigment
         $rolename,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [string]
         # duration of the assignment, if not set we will use the maximum allowed value from the role policy
         $duration,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [string]
         # stat date of assignment if not provided we will use curent time
         $startDateTime,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [string]
         # justification (will be auto generated if not provided)
         $justification,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
+        [Alias('DirectoryScopeId','AdministrativeUnitId')]
+        [string]
+        # Optional scope for the removal request; defaults to '/' (tenant)
+        $Scope,
+
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [switch]
         # the assignment will not expire
         $permanent
@@ -77,6 +109,37 @@ function Remove-PIMEntraRoleEligibleAssignment {
 
     try {
         $script:tenantID = $tenantID
+
+        if ($PSCmdlet.ParameterSetName -eq 'ByPrincipalName') {
+            $resolvedPrincipal = $null
+            try {
+                $resolvedPrincipal = Resolve-EasyPIMPrincipal -PrincipalIdentifier $principalName -AllowDisplayNameLookup -AllowAppIdLookup -ErrorContext 'Remove-PIMEntraRoleEligibleAssignment'
+            }
+            catch {
+                Write-Verbose "Primary principal resolution failed for '$principalName': $($_.Exception.Message)"
+            }
+
+            if ($resolvedPrincipal) {
+                $principalID = $resolvedPrincipal.Id
+                Write-Verbose "Resolved principalName '$principalName' to object ID '$principalID' (type=$($resolvedPrincipal.Type))."
+            }
+            else {
+                Write-Verbose "Falling back to eligible assignment lookup for '$principalName'."
+                $matchingAssignments = Get-PIMEntraRoleEligibleAssignment -tenantID $tenantID -rolename $rolename -principalName $principalName
+                $principalCandidates = $matchingAssignments | Select-Object -ExpandProperty principalid -Unique
+
+                if (-not $principalCandidates -or $principalCandidates.Count -eq 0) {
+                    throw "No eligible assignment found matching principalName '$principalName' for role '$rolename'. Provide -principalID or ensure the name matches an eligible assignment."
+                }
+
+                if ($principalCandidates.Count -gt 1) {
+                    throw "Multiple eligible assignments matched principalName '$principalName' for role '$rolename'. Provide -principalID or refine the name to a unique match."
+                }
+
+                $principalID = $principalCandidates[0]
+                Write-Verbose "Resolved principalName '$principalName' via eligible assignment lookup to object ID '$principalID'."
+            }
+        }
 
 
         if ($PSBoundParameters.Keys.Contains('startDateTime')) {
@@ -114,12 +177,15 @@ function Remove-PIMEntraRoleEligibleAssignment {
             $type = "NoExpiration"
         }
 
+        # Resolve the directory scope to the correct Graph identifier (defaults to '/' for tenant scope)
+        $targetScope = Resolve-EasyPIMDirectoryScope -Scope $Scope -DefaultScope '/' -ErrorContext 'Remove-PIMEntraRoleEligibleAssignment'
+
         $body = '
 {
     "action": "adminRemove",
     "justification": "'+ $justification + '",
     "roleDefinitionId": "'+ $config.roleID + '",
-    "directoryScopeId": "/",
+    "directoryScopeId": "'+ $targetScope + '",
     "principalId": "'+ $principalID + '",
     "scheduleInfo": {
         "startDateTime": "'+ $startDateTime + '",

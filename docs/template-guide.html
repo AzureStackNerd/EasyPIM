@@ -1,0 +1,320 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="EasyPIM Orchestrator template patterns that prevent human error and keep privileged role policies consistent.">
+    <title>EasyPIM Templates & Inline Overrides</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" sizes="any">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="guide-page">
+  <header class="site-header guide-header">
+    <div class="container">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span class="brand-name">EasyPIM</span>
+      </a>
+      <nav class="site-nav" aria-label="Adoption navigation">
+        <button class="nav-toggle" aria-expanded="false" aria-controls="guide-nav">Menu</button>
+        <ul id="guide-nav">
+          <li><a href="index.html#adoption">Adoption map</a></li>
+          <li><a href="compare.html">Compare workflows</a></li>
+          <li><a href="index.html#faq">FAQ</a></li>
+          <li><a class="cta" href="https://github.com/kayasax/EasyPIM" target="_blank" rel="noopener">Get EasyPIM</a></li>
+        </ul>
+            </nav>
+        </div>
+    </header>
+
+  <main class="guide-main">
+    <div class="container">
+      <nav class="stage-nav" aria-label="Stage navigation">
+        <a href="index.html#adoption">← Back to adoption map</a>
+        <a href="core.html">Stage 1 · Core</a>
+        <a href="template-guide.html" aria-current="page">Stage 2 · Orchestrator</a>
+                <a href="event-driven.html">Stage 3 · Event-driven</a>
+      </nav>
+    </div>
+        <section class="hero guide-hero" id="templates">
+            <div class="container hero-grid">
+                <div class="hero-copy">
+      <p class="eyebrow">Stage 2 · EasyPIM.Orchestrator</p>
+          <h1>Bring privileged access under EasyPIM.Orchestrator control</h1>
+          <p class="hero-lead">Store your PIM model in JSON, preview drift, and apply approved policies and assignments consistently across Entra, Azure, and group roles.</p>
+                    <ul class="hero-pillars">
+            <li><span class="highlight">Configuration-as-code</span> covering policy expectations, assignments, and protected users.</li>
+            <li><span class="highlight">Safety-first workflow</span> with WhatIf previews, WouldRemove exports, and drift reports.</li>
+            <li><span class="highlight">Reusable templates</span> to enforce the same requirements everywhere without copy/paste.</li>
+            <li><span class="highlight">Scoped overrides</span> that document the rare roles needing different guardrails.</li>
+                    </ul>
+                </div>
+                <div class="hero-visual" aria-hidden="true">
+          <div class="glass-card feature-card">
+            <span class="card-eyebrow">Prevent human error</span>
+            <h2>Same template, any platform</h2>
+            <p>Define the policy once and apply it to both Entra roles and Azure RBAC roles—no duplicate JSON to maintain.</p>
+          </div>
+          <div class="glass-card feature-card">
+            <span class="card-eyebrow">Auditable exceptions</span>
+            <h2>Overrides stay with each role</h2>
+            <p>Inline adjustments sit next to the role definition, so reviewers can see why the change exists and confirm it was approved.</p>
+          </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" aria-labelledby="config-overview">
+            <div class="container">
+                <h2 id="config-overview">Step 1 · Model your privileged access as code</h2>
+                <p class="section-lead">EasyPIM.Orchestrator reads a single configuration file that captures policy expectations and assignments for Entra roles, Azure RBAC, and privileged groups so you can version control every change.</p>
+                <div class="card-grid">
+                    <article class="value-card gradient-blue">
+                        <h3>Single configuration source</h3>
+                        <p>Track policy baselines, assignments, ProtectedUsers, and metadata together under source control.</p>
+                    </article>
+                    <article class="value-card gradient-purple">
+                        <h3>Deterministic apply</h3>
+                        <p>EasyPIM.Orchestrator resolves the JSON into concrete policies and assignments before touching your tenant.</p>
+                    </article>
+                    <article class="value-card gradient-teal">
+                        <h3>CI/CD ready</h3>
+                        <p>Run the same file locally, in GitHub Actions, or Azure DevOps with OIDC authentication and audit-friendly exports.</p>
+                    </article>
+                </div>
+                <pre class="code-block language-json"><code class="language-json">{
+  "PolicyTemplates": {}, #empty for clarity, see step 2 to learn more
+  "EntraRoles": {
+    "Policies": {
+      "Security Reader": { "Template": "HighSecurity" }
+    }
+  },
+  "AzureRoles": {
+    "Policies": {
+      "Reader": {
+        "Scope": "/subscriptions/&lt;subscriptionId&gt;",
+        "Template": "HighSecurity"
+      }
+    }
+  },
+  "Assignments": {
+    "EntraRoles": [
+      {
+        "roleName": "Security Reader",
+        "assignments": [
+          {
+            "principalId": "11111111-2222-3333-4444-555555555555",
+            "principalType": "User",
+            "assignmentType": "Eligible",
+            "duration": "P30D",
+            "justification": "Baseline Tier-0 review cadence"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+                <div class="glass-card guide-callout">
+                    <h3>Treat the JSON like any other infrastructure code</h3>
+                    <p>Store the configuration in Git, require pull requests, and let orchestrator commands enforce the approved state in every environment.</p>
+                </div>
+            </div>
+        </section>
+
+    <section class="section" aria-labelledby="baseline-template">
+      <div class="container">
+        <h2 id="baseline-template">Step 2 · define reusable policy templates</h2>
+        <p class="section-lead">Capture your default approval, activation, and notification requirements inside the <code>PolicyTemplates</code> block so every role can inherit the same guardrails.</p>
+                <pre class="code-block language-json"><code class="language-json">{
+  "PolicyTemplates": {
+    "HighSecurity": {
+      "ActivationDuration": "PT4H",
+      "ActivationRequirement": "MultiFactorAuthentication,Justification,Ticketing",
+      "ApprovalRequired": true,
+      "Approvers": [
+        {
+          "id": "11111111-2222-3333-4444-555555555555",
+          "description": "Privileged Access CAB"
+        }
+      ],
+      "AllowPermanentEligibility": false,
+      "MaximumEligibilityDuration": "P30D",
+      "Notification_Activation_Alert": {
+        "isDefaultRecipientEnabled": true,
+        "notificationLevel": "All",
+        "Recipients": ["soc-alerts@contoso.com"]
+      }
+    }
+  }
+}</code></pre>
+                <div class="glass-card guide-callout">
+                    <h3>Template keys = telemetry context</h3>
+                    <p>Use descriptive template names (<code>HighSecurity</code>, <code>Tier0</code>, <code>FinanceSOX</code>). They appear in drift reports, WhatIf output, and telemetry, making it obvious which safeguard is in effect.</p>
+                </div>
+            </div>
+        </section>
+
+    <section class="section" id="overrides" aria-labelledby="reference-template">
+      <div class="container">
+        <h2 id="reference-template">Step 3 · reference the template in your role policies</h2>
+        <p class="section-lead">Define each role in the policy block and point it at the shared template. Set <code>PolicySource</code> to <code>"template"</code> so diffs stay explicit.</p>
+                <pre class="code-block language-json"><code class="language-json">{
+  "EntraRoles": {
+    "Policies": [
+      {
+        "RoleName": "Security Administrator",
+        "PolicySource": "template",
+        "Template": "HighSecurity"
+      },
+      {
+        "RoleName": "Privileged Role Administrator",
+        "PolicySource": "template",
+        "Template": "HighSecurity"
+      }
+    ]
+  }
+}</code></pre>
+                <div class="glass-card guide-callout">
+                    <h3>One template for different resources</h3>
+                    <p>Because they share common structure a single template can be applied to Entra and Azure roles</p>
+                </div>
+            </div>
+        </section>
+
+    <section class="section" aria-labelledby="inline-override">
+      <div class="container">
+        <h2 id="inline-override">Step 4 · add inline overrides when a role needs something special</h2>
+                <p class="section-lead">Only specify the fields that differ from the template. EasyPIM merges your overrides with the template and records the resulting payload as <code>ResolvedPolicy</code> for auditing.</p>
+                <div class="code-example-grid">
+                    <div>
+                        <h3>Configuration excerpt</h3>
+                        <pre class="code-block language-json"><code class="language-json">{
+  "EntraRoles": {
+    "Policies": [
+      {
+        "RoleName": "User Access Administrator",
+        "PolicySource": "template",
+        "Template": "HighSecurity",
+        "ActivationRequirement": "MultiFactorAuthentication,Justification,Ticketing",
+        "AuthenticationContext_Enabled": true,
+        "AuthenticationContext_Value": "c1:HighRiskOperations",
+        "Notification_Activation_Alert": {
+          "isDefaultRecipientEnabled": true,
+          "notificationLevel": "Critical",
+          "Recipients": [
+            "soc-alerts@contoso.com",
+            "compliance@contoso.com"
+          ]
+        }
+      }
+    ]
+  }
+}</code></pre>
+                    </div>
+                    <div>
+                        <h3>What the orchestrator applies</h3>
+                        <pre class="code-block language-json"><code class="language-json">{
+  "RoleName": "User Access Administrator",
+  "PolicySource": "template",
+  "Template": "HighSecurity",
+  "ResolvedPolicy": {
+    "ActivationDuration": "PT4H",
+    "ActivationRequirement": "MultiFactorAuthentication,Justification,Ticketing",
+    "ApprovalRequired": true,
+    "Approvers": [
+      {
+        "id": "11111111-2222-3333-4444-555555555555",
+        "description": "Privileged Access CAB"
+      }
+    ],
+    "AuthenticationContext_Enabled": true,
+    "AuthenticationContext_Value": "c1:HighRiskOperations",
+    "AllowPermanentEligibility": false,
+    "MaximumEligibilityDuration": "P30D",
+    "Notification_Activation_Alert": {
+      "isDefaultRecipientEnabled": true,
+      "notificationLevel": "Critical",
+      "Recipients": [
+        "soc-alerts@contoso.com",
+        "compliance@contoso.com"
+      ]
+    }
+  }
+}</code></pre>
+                    </div>
+                </div>
+        <div class="glass-card guide-callout">
+          <h3>Make the review easy to follow</h3>
+          <p>Include a short note in your change review explaining why this role deviates. Auditors can trace the review back to the JSON line that changed and confirm the override in <code>ResolvedPolicy</code> output.</p>
+        </div>
+                <div class="hero-actions">
+                    <a class="btn" href="https://github.com/kayasax/EasyPIM/blob/main/EasyPIM/Documentation/Enhanced-Orchestrator-Policy-Usage.md#inline-overrides" target="_blank" rel="noopener">Review inline override playbook</a>
+                    <a class="btn" href="https://github.com/kayasax/EasyPIM/blob/main/EasyPIM/Documentation/Step-by-step-Guide.md#step-8---inline-overrides" target="_blank" rel="noopener">Practice the override workflow</a>
+                </div>
+            </div>
+        </section>
+
+    <section class="section" id="workflow" aria-labelledby="automation">
+      <div class="container">
+        <h2 id="automation">Step 5 · validate drift and apply with EasyPIM.Orchestrator</h2>
+        <p class="section-lead">Run <code>Test-PIMPolicyDrift</code> to spot configuration deviations, then execute <code>Invoke-EasyPIMOrchestrator</code> once reviewers approve the change.</p>
+  <pre class="code-block language-powershell"><code class="language-powershell"># Detect drift before merging a pull request
+Test-PIMPolicyDrift `
+  -TenantId $TENANT_ID `
+  -SubscriptionId $SUBSCRIPTION_ID `
+  -ConfigPath "./config/pim-template-demo.json" `
+  -PassThru |
+  Where-Object Status -ne 'Match'</code></pre>
+  <pre class="code-block language-powershell"><code class="language-powershell"># Apply the approved configuration
+Invoke-EasyPIMOrchestrator `
+  -ConfigFilePath "./config/pim-template-demo.json" `
+  -TenantId $TENANT_ID `
+  -SubscriptionId $SUBSCRIPTION_ID `
+  -Mode delta `
+  -WhatIf `
+  -WouldRemoveExportPath "./reports/would-remove"
+
+# When the preview looks good, rerun without -WhatIf</code></pre>
+        <div class="glass-card guide-callout">
+          <h3>Audit every run</h3>
+          <p><code>Test-PIMPolicyDrift</code> produces a drift report you can archive, and the orchestrator’s WouldRemove export captures every assignment change for reviewers and auditors.</p>
+        </div>
+      </div>
+    </section>
+
+        <section class="section" aria-labelledby="next-steps">
+            <div class="container">
+                <h2 id="next-steps">Next steps</h2>
+        <div class="hero-actions">
+          <a class="btn" href="https://github.com/kayasax/EasyPIM/blob/main/EasyPIM/Documentation/Configuration-Schema.md" target="_blank" rel="noopener">Review the configuration schema</a>
+          <a class="btn" href="https://github.com/kayasax/EasyPIM/blob/main/EasyPIM/Documentation/Step-by-step-Guide.md" target="_blank" rel="noopener">Follow the step-by-step guide</a>
+          <a class="btn" href="event-driven.html">Prepare for Stage 3 event-driven automation</a>
+      <a class="btn" href="compare.html">Compare with Microsoft Learn</a>
+      <a class="btn" href="snippets.html">Browse automation snippets</a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>&copy; 2025 EasyPIM. MIT Licensed. Built for Microsoft Entra PIM automation teams.</p>
+      <div class="stage-nav" aria-label="Footer adoption navigation">
+        <a href="index.html#adoption">Adoption map</a>
+        <a href="core.html">Stage 1</a>
+        <a href="template-guide.html" aria-current="page">Stage 2</a>
+        <a href="event-driven.html">Stage 3</a>
+      </div>
+    </div>
+  </footer>
+
+      <!-- Cloudflare Web Analytics -->
+      <script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "b40ad1359e664d4ab95292e1ebf5ec11"}'></script>
+      <!-- End Cloudflare Web Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-powershell.min.js" defer></script>
+  <script src="script.js" defer></script>
+</body>
+</html>

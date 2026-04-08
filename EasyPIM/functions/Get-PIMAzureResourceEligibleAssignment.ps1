@@ -95,10 +95,10 @@ function Get-PIMAzureResourceEligibleAssignment {
         # the downside is we will not get assignment with a future start date
         $armEndpoint = Get-PIMAzureEnvironmentEndpoint -EndpointType 'ARM'
         if ($PSBoundParameters.Keys.Contains('includeFutureAssignments')) {
-            $restURI = "$($armEndpoint.TrimEnd('/'))/$scope/providers/Microsoft.Authorization/roleEligibilitySchedules?api-version=2020-10-01-preview"
+            $restURI = "$($armEndpoint.TrimEnd('/'))/$($scope.TrimStart('/'))/providers/Microsoft.Authorization/roleEligibilitySchedules?api-version=2020-10-01-preview"
         }
         else {
-            $restURI = "$($armEndpoint.TrimEnd('/'))/$scope/providers/Microsoft.Authorization/roleEligibilityScheduleInstances?api-version=2020-10-01-preview"
+            $restURI = "$($armEndpoint.TrimEnd('/'))/$($scope.TrimStart('/'))/providers/Microsoft.Authorization/roleEligibilityScheduleInstances?api-version=2020-10-01-preview"
         }
 
         # Determine which principal ID to use for filtering
@@ -130,7 +130,7 @@ function Get-PIMAzureResourceEligibleAssignment {
 
 
 
-        $response = Invoke-ARM -restURI $restURI -method get
+        $response = Invoke-ARM -restURI $restURI -method get -TenantId $tenantID -SubscriptionId $subscriptionID
         #$response|select -first 1
 
         $return = @()
@@ -154,13 +154,15 @@ function Get-PIMAzureResourceEligibleAssignment {
                     "ScopeId"        = $_.expandedproperties.scope.id;
                     "ScopeName"      = $_.expandedproperties.scope.displayName;
                     "ScopeType"      = $_.expandedproperties.scope.type;
-                    "Status"         = $_.Status;
-                    "createdOn"      = $_.createdOn
-                    "startDateTime"  = $_.startDateTime
-                    "endDateTime"    = $end
-                    "updatedOn"      = $_.updatedOn
-                    "memberType"     = $_.memberType
-                    "id"             = $id
+                    "Status"           = $_.Status;
+                    "createdOn"        = $_.createdOn
+                    "startDateTime"    = $_.startDateTime
+                    "endDateTime"      = $end
+                    "updatedOn"        = $_.updatedOn
+                    "memberType"       = $_.memberType
+                    "id"               = $id
+                    "Condition"        = $_.condition
+                    "ConditionVersion" = $_.conditionVersion
                 }
 
 

@@ -1,144 +1,193 @@
-### Readme
+<p align="center">
+  <img src="docs/assets/logo_transparent.svg" alt="EasyPIM logo" width="180">
+  <h1 align="center">🛡️ EasyPIM</h1>
+  <p align="center">
+    <strong>PowerShell automation for Azure Privileged Identity Management.</strong>
+  </p>
+  <p align="center">
+    <a href="https://www.powershellgallery.com/packages/EasyPIM"><img src="https://img.shields.io/powershellgallery/v/easypim?label=Core&logo=powershell&color=blue" alt="Core Version"></a>
+    <a href="https://www.powershellgallery.com/packages/EasyPIM.Orchestrator"><img src="https://img.shields.io/powershellgallery/v/EasyPIM.Orchestrator?label=Orchestrator&logo=powershell&color=blue" alt="Orchestrator Version"></a>
+    <a href="https://www.powershellgallery.com/packages/EasyPIM"><img src="https://img.shields.io/powershellgallery/dt/easypim?label=Core%20Downloads&color=green" alt="Core Downloads"></a>
+    <a href="https://www.powershellgallery.com/packages/EasyPIM.Orchestrator"><img src="https://img.shields.io/powershellgallery/dt/EasyPIM.Orchestrator?label=Orchestrator%20Downloads&color=green" alt="Orchestrator Downloads"></a>
+    <a href="https://github.com/kayasax/EasyPIM/stargazers"><img src="https://img.shields.io/github/stars/kayasax/EasyPIM?style=social" alt="GitHub Stars"></a>
+    <a href="https://github.com/kayasax/EasyPIM/blob/main/LICENSE"><img src="https://img.shields.io/github/license/kayasax/EasyPIM" alt="License"></a>
+  </p>
+</p>
 
-[![PSGallery Version](https://img.shields.io/powershellgallery/v/easypim.svg?style=flat&logo=powershell&label=PSGallery%20Version)](https://www.powershellgallery.com/packages/easypim) [![PSGallery Downloads](https://img.shields.io/powershellgallery/dt/easypim.svg?style=flat&logo=powershell&label=PSGallery%20Downloads)](https://www.powershellgallery.com/packages/easypim)
+---
 
-[![Orchestrator Version](https://img.shields.io/powershellgallery/v/EasyPIM.Orchestrator.svg?style=flat&logo=powershell&label=Orchestrator%20Version)](https://www.powershellgallery.com/packages/EasyPIM.Orchestrator) [![Orchestrator Downloads](https://img.shields.io/powershellgallery/dt/EasyPIM.Orchestrator.svg?style=flat&logo=powershell&label=Orchestrator%20Downloads)](https://www.powershellgallery.com/packages/EasyPIM.Orchestrator)
-## Introduction
+Bulk-harden role policies. Clone settings across roles. Export assignments. Detect configuration drift. Approve or deny requests. Deploy full PIM models from JSON.
 
-EasyPIM is a PowerShell module created to help you manage Microsoft Privileged Identity Management (PIM) either working with Entra ID, Azure RBAC or groups.
-Packed with more than 50 cmdlets, EasyPIM leverages the ARM and Graph APIs complexity to let you configure PIM **Azure Resources**, **Entra Roles** and **groups** settings and assignments in a simple way.
+**One PowerShell module covering Azure Resources, Entra ID Roles, and Security Groups** — with cmdlets that do what the portal can't. Unified ARM and Graph APIs, 50+ commands, 4 Azure clouds.
 
-## 🚀 Major Release: EasyPIM v2.0 & Orchestrator v1.0
+> 🌐 **Start here →** The **[EasyPIM Adoption Hub](https://kayasax.github.io/EasyPIM/)** walks you from first install to enterprise-grade PIM governance in three stages.
 
-- 🎯 **Major architectural milestone**: Complete module separation
-- 🔧 **ARM API compatibility fixes**: Resolves InvalidResourceType errors
-- 🛡️ **Enhanced policy validation**: Proactive error detection with clear guidance
-- 📏 **Parameter standardization**: Consistent naming with backward compatibility
-- 🏗️ **Production-ready orchestrator**
+## 🚀 Quick Start
 
-⚠️ **Breaking Changes in v2.0**: Parameter `assignee` renamed to `principalId` (alias provided for compatibility)
+```powershell
+Install-Module EasyPIM, EasyPIM.Orchestrator -Force
 
+# Harden 3 Entra roles in one shot — try that in the portal
+Set-PIMEntraRolePolicy -TenantID $tenantId `
+    -RoleName "Global Administrator","Security Administrator","Exchange Administrator" `
+    -ActivationRequirement "Justification","Ticketing","MultiFactorAuthentication" `
+    -ActivationDuration "PT4H"
 
+# Audit every eligible assignment across a subscription
+Get-PIMAzureResourceEligibleAssignment -TenantID $tenantId -SubscriptionId $subId
 
-🆕 **Module separation complete**: The JSON-driven orchestrator is now a standalone module: EasyPIM.Orchestrator (requires EasyPIM ≥ 2.0.0).
-**Orchestrated flow guide:** [step-by-step](https://github.com/kayasax/EasyPIM/wiki/Invoke%E2%80%90EasyPIMOrchestrator-step%E2%80%90by%E2%80%90step-guide)
-🌍 EasyPIM supports multi-cloud (Public, Government, China, Germany) thanks to [Chase Dafnis](https://github.com/CHDAFNI-MSFT)!
-
-## Key features
-:boom: Support editing multiple roles at once  
-:boom: Copy settings from one role to another  
-:boom: Copy eligible assignments from one user to another  
-:boom: Export role settings to csv  
-:boom: Import role settings from csv  
-:boom: Backup all roles  
-:boom: New in V1.6 get PIM activity reporting  
-:boom: New in V1.7 Approve/Deny pending requests  
-:fire: Orchestrated flow (moved to EasyPIM.Orchestrator): [overview](https://github.com/kayasax/EasyPIM/wiki/Invoke%E2%80%90EasyPIMOrchestrator)  
-👌 Define your full PIM model (Entra, Azure RBAC, Groups, policies, assignments, protected accounts) from a single JSON.  
-👉 Use the dedicated module EasyPIM.Orchestrator and follow the [step-by-step guide](https://github.com/kayasax/EasyPIM/wiki/Invoke%E2%80%90EasyPIMOrchestrator-step%E2%80%90by%E2%80%90step-guide)
-
-🗒️Change log: [https://github.com/kayasax/EasyPIM/wiki/Changelog](https://github.com/kayasax/EasyPIM/wiki/Changelog)
-
-[📸 View the EasyPIM Gallery](Gallery.html)
-
-## Installation
-
-```pwsh
-# Install both modules for complete functionality
-Install-Module -Name EasyPIM
-Install-Module -Name EasyPIM.Orchestrator
+# Deploy a full PIM model from JSON — Entra + Azure + Groups in one run
+Invoke-EasyPIMOrchestrator -TenantId $tenantId -ConfigurationPath "./pim-config.json"
 ```
 
-### Getting Started
-```pwsh
-Import-Module EasyPIM
-Import-Module EasyPIM.Orchestrator  # For orchestration features
-Get-Command -Module EasyPIM*
+---
+
+## ✨ Things The Portal Can't Do
+
+| | |
+|---|---|
+| ⚡ **Bulk-harden roles** | Set MFA + justification + ticketing on 30 roles in one command |
+| 🔄 **Clone role settings** | Copy a hardened policy to other roles/users — no manual re-clicking |
+| 📊 **Export & import** | Assignments to CSV, full configs to JSON — audit-ready in seconds |
+| 🔍 **Detect policy drift** | Compare live state vs declared config, get a diff report |
+| 🏢 **CI/CD governance** | GitHub Actions & Azure DevOps ([Event-Driven Demo](https://github.com/kayasax/EasyPIM-EventDriven-Governance)) |
+| ☁️ **Multi-cloud** | Public, Government, China, Germany — same cmdlets everywhere |
+| 🔗 **Unified ARM + Graph** | One module abstracts both APIs — no context-switching |
+
+---
+
+## 📦 Install
+
+```powershell
+Install-Module EasyPIM, EasyPIM.Orchestrator -Scope CurrentUser
 ```
 
-## Sample usage
+| Requirement | Details |
+|---|---|
+| PowerShell | 5.1+ or 7.0+ |
+| Modules | `Az.Accounts`, `Microsoft.Graph.Authentication` (auto-installed) |
+| Azure Resources | `Owner` or `User Access Administrator` on the subscription |
+| Entra ID / Groups | Graph permissions: `RoleManagement.ReadWrite.Directory`, `RoleManagementPolicy.ReadWrite.Directory`, and [others](https://github.com/kayasax/EasyPIM/wiki/Documentation) |
 
-*Note: EasyPIM manage PIM Azure Resource settings **at the subscription level by default** : enter a tenant ID, a subscription ID, a role name
-then the options you want to set, for example require justification on activation.
-If you want to manage the role at another level (Management Group, Resource Group or Resource) please use the `scope` parameter instead of the `subscriptionID`.*
+---
 
+## 📖 Learn More
 
-:large_blue_diamond: Get configuration of the Azure Resources roles reader and Webmaster
- ```pwsh
- Get-PIMAzureResourcePolicy -TenantID $tenantID -SubscriptionId $subscriptionID -rolename "reader","webmaster"
- ```
+| | |
+|---|---|
+| **[🌐 Adoption Hub](https://kayasax.github.io/EasyPIM/)** | **Three-stage journey: quick-starts, best practices, enterprise patterns** |
+| [📋 Full Documentation](https://github.com/kayasax/EasyPIM/wiki/Documentation) | In-depth guides and API reference |
+| [🎯 Use Cases & Examples](https://github.com/kayasax/EasyPIM/wiki/Use-Cases) | Real-world implementation scenarios |
+| [🏗 Orchestrator Guide](https://github.com/kayasax/EasyPIM/wiki/Invoke%E2%80%90EasyPIMOrchestrator-step%E2%80%90by%E2%80%90step-guide) | JSON-driven workflows step-by-step |
+| [🔄 Migration v1→v2](https://github.com/kayasax/EasyPIM/wiki/Module-Migration) | Upgrading from v1.x |
+| [📝 Changelog](https://github.com/kayasax/EasyPIM/wiki/Changelog) | Version history |
 
-:large_blue_diamond: Require justification, ticketing and MFA when activating the Entra Role testrole
- ```pwsh
- Set-PIMEntraRolePolicy -tenantID $tenantID -rolename "testrole"  -ActivationRequirement "Justification","Ticketing","MultiFactorAuthentication"
- ```
+---
 
-:large_blue_diamond: Require approval and set approvers for Azure roles webmaster and contributor
-```pwsh
-Set-PIMAzureResourcePolicy -TenantID $tenantID -SubscriptionId $subscriptionID -rolename "webmaster","contributor" -Approvers  @(@{"Id"="00b34bb3-8a6b-45ce-a7bb-c7f7fb400507";"Name"="John";"Type"="user"}) -ApprovalRequired $true
-```
+## 🔧 Two Modules, One Platform
 
-:large_blue_diamond: Set maximum activation duration to 4h for the member role of a group
-```pwsh
-Set-PIMGroupPolicy -tenantID $tenantID -groupID "ba6af9bf-6b28-4799-976e-ff71aed3a1bd" -type member -ActivationDuration "PT4H"
-```
+| Module | Purpose | Key Commands |
+|---|---|---|
+| **EasyPIM** (Core) | Direct PIM API management — policies, assignments, approvals | `Get-PIM*`, `Set-PIM*`, `New-PIM*` |
+| **EasyPIM.Orchestrator** | JSON workflows, drift detection, business rules, CI/CD | `Invoke-EasyPIMOrchestrator`, `Test-PIMPolicyDrift` |
 
-:large_blue_diamond: Get a reporting of the PIM activities based on Entra ID Audit logs
-```pwsh
-$r=Show-PIMReport -tenantID $tenantID
-```
+<details>
+<summary>Click to expand the full cmdlet list (50+)</summary>
 
-:large_blue_diamond: List all eligible assignments for Azure roles
-```pwsh
- Get-PIMAzureResourceEligibleAssignment -tenantID $tenantID -subscriptionID $subscriptionId
-```
+### Azure Resource Roles
 
-:large_blue_diamond: Create an active assignment for a principal and the Entra role testrole
-```pwsh
-New-PIMEntraRoleActiveAssignment -tenantID $tenantID -rolename "testrole" -principalID $groupID
-```
+| Cmdlet | Description |
+|---|---|
+| `Get-PIMAzureResourcePolicy` | Get role policy settings |
+| `Set-PIMAzureResourcePolicy` | Configure activation requirements, duration, approvers |
+| `Get-PIMAzureResourceEligibleAssignment` | List eligible assignments |
+| `New-PIMAzureResourceEligibleAssignment` | Create eligible assignment |
+| `Remove-PIMAzureResourceEligibleAssignment` | Remove eligible assignment |
+| `Get-PIMAzureResourceActiveAssignment` | List active assignments |
+| `New-PIMAzureResourceActiveAssignment` | Create active assignment |
+| `Remove-PIMAzureResourceActiveAssignment` | Remove active assignment |
 
-More samples available in the [documentation](https://github.com/kayasax/EasyPIM/wiki/Documentation)
+### Entra ID Roles
 
-## Module split and migration
-- The following commands moved into the EasyPIM.Orchestrator module:
-    - Invoke-EasyPIMOrchestrator
-    - Test-PIMPolicyDrift
-    - Test-PIMEndpointDiscovery
-- After installing EasyPIM.Orchestrator, import it to access these commands. Any legacy shims in the core module will emit guidance and forward where applicable.
+| Cmdlet | Description |
+|---|---|
+| `Get-PIMEntraRolePolicy` | Get Entra role policy settings |
+| `Set-PIMEntraRolePolicy` | Configure activation requirements, MFA, approvers |
+| `Get-PIMEntraRoleEligibleAssignment` | List eligible assignments |
+| `New-PIMEntraRoleEligibleAssignment` | Create eligible assignment |
+| `Remove-PIMEntraRoleEligibleAssignment` | Remove eligible assignment |
+| `Get-PIMEntraRoleActiveAssignment` | List active assignments |
+| `New-PIMEntraRoleActiveAssignment` | Create active assignment |
+| `Remove-PIMEntraRoleActiveAssignment` | Remove active assignment |
 
-## Troubleshooting
+### Groups
 
-### Common Issues
-- **Key Vault Configuration Loading**: If you encounter JSON parsing errors when loading configurations from Azure Key Vault, see the [Key Vault Troubleshooting Guide](./EasyPIM/Documentation/KeyVault-Troubleshooting.md)
-- **ARM API Errors**: For InvalidResourceType or authentication issues, ensure you have the correct permissions and are using the latest module version
-- **Graph API Permissions**: Verify that required Microsoft Graph permissions have been granted to your application
+| Cmdlet | Description |
+|---|---|
+| `Get-PIMGroupPolicy` | Get group PIM policy settings |
+| `Set-PIMGroupPolicy` | Configure group activation requirements |
+| `Get-PIMGroupEligibleAssignment` | List eligible group assignments |
+| `New-PIMGroupEligibleAssignment` | Create eligible group assignment |
+| `Remove-PIMGroupEligibleAssignment` | Remove eligible group assignment |
+| `Get-PIMGroupActiveAssignment` | List active group assignments |
+| `New-PIMGroupActiveAssignment` | Create active group assignment |
+| `Remove-PIMGroupActiveAssignment` | Remove active group assignment |
 
-### Getting Help
-- Check the [documentation](https://github.com/kayasax/EasyPIM/wiki/Documentation) for detailed guides
-- Review [common use cases](https://github.com/kayasax/EasyPIM/wiki/Use-Cases) for implementation examples
-- For Key Vault specific issues, use the enhanced diagnostics: `Get-EasyPIMConfiguration -Verbose`
+### Operations & Utilities
 
-## Documentation
-[documentation](https://github.com/kayasax/EasyPIM/wiki/Documentation)
+| Cmdlet | Description |
+|---|---|
+| `Approve-PIMPendingRequest` | Approve pending activation requests |
+| `Deny-PIMPendingRequest` | Deny pending activation requests |
+| `Get-PIMReport` | PIM activity analytics and audit trails |
+| `Backup-PIMConfiguration` | Full PIM state backup |
+| `Restore-PIMConfiguration` | Restore from backup |
+| `Copy-PIMRoleSettings` | Clone settings between roles |
+| `Export-PIMAssignment` | Export assignments to CSV |
+| `Import-PIMAssignment` | Import assignments from CSV |
 
-## Use cases
-Discover how EasyPIM answers to common challenges [Use cases](https://github.com/kayasax/EasyPIM/wiki/Use-Cases)
+### Orchestrator
 
-## Contributors
-- **Loïc MICHEL** - Original author and maintainer
-- **Chase Dafnis** - Multi-cloud / Azure environment support
+| Cmdlet | Description |
+|---|---|
+| `Invoke-EasyPIMOrchestrator` | Deploy complete PIM configuration from JSON |
+| `Test-PIMPolicyDrift` | Detect policy drift against declared state |
+| `Test-PIMEndpointDiscovery` | Connectivity and permissions validation |
 
-## Requirement
-* Az.Accounts module
-* Permission:
-The PIM API for Azure resource roles is developed on top of the Azure Resource Manager framework. You will need to give consent to Azure Resource Management but won’t need any Microsoft Graph API permission. You will also need to make sure the user or the service principal calling the API has at least the Owner or User Access Administrator role on the resource you are trying to administer.
-* an administrator must grant consent these permissions to the Microsoft Graph PowerShell application:
-"RoleManagementPolicy.ReadWrite.Directory",
-                "RoleManagement.ReadWrite.Directory",
-                "RoleManagementPolicy.ReadWrite.AzureADGroup",
-                "PrivilegedEligibilitySchedule.ReadWrite.AzureADGroup",
-                "PrivilegedAssignmentSchedule.ReadWrite.AzureADGroup",
-                "PrivilegedAccess.ReadWrite.AzureADGroup"
+</details>
 
+---
 
+## 🌐 Coverage
+
+**3 PIM scopes**: Azure Resources (subscription, management group, resource group) · Entra ID Roles · Security Groups
+
+**4 clouds**: Public · Government · China · Germany
+
+---
+
+## 🤝 Related Projects
+
+| | |
+|---|---|
+| **[EasyTCM](https://github.com/kayasax/EasyTCM)** | Tenant Configuration Monitoring — detect config drift across Entra, Exchange, Intune, Teams & Compliance |
+| **[Event-Driven Governance](https://github.com/kayasax/EasyPIM-EventDriven-Governance)** | Production CI/CD demo: GitHub Actions + Azure DevOps + Event Grid |
+
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Contributors
+
+- **[Loïc MICHEL](https://github.com/kayasax)** — Author and maintainer
+- **[Chase Dafnis](https://github.com/CHDAFNI-MSFT)** — Multi-cloud / Azure environment support
+- **[jeenvan](https://github.com/jeevanions)** — Orchestrator: array format & management group scope fixes
+
+---
+
+<p align="center">
+  Built with ❤️ for the Azure Administrator Community<br>
+  <strong>Also by the author: <a href="https://github.com/kayasax/EasyTCM">EasyTCM</a> — M365 tenant config drift detection</strong>
+</p>

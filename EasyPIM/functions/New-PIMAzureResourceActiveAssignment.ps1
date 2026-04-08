@@ -11,6 +11,8 @@
     use scope parameter if you want to work at other scope than a subscription
     .Parameter principalID
     objectID of the principal (user, group or service principal)
+    .Parameter principalName
+    Display name, UPN, object ID, or appId of the principal. Will be resolved to principalID when provided.
     .Parameter rolename
     name of the role to assign
     .Parameter duration
@@ -21,6 +23,11 @@
     Use this parameter if you want a permanent assignement (no expiration)
     .Parameter justification
     justification
+    .Parameter condition
+    ABAC condition expression string for role assignment conditions (e.g. to restrict access by resource attribute).
+    See https://learn.microsoft.com/en-us/azure/role-based-access-control/conditions-overview
+    .Parameter conditionVersion
+    Version of the condition language. Defaults to "2.0" when condition is provided.
 
 
     .Example
@@ -32,6 +39,14 @@
 
     Create a permanent active assignement for the role webmaster
 
+    PS> New-PIMAzureResourceActiveAssigment -tenantID $tenantID -scope "/subscriptions/$subscriptionId/resourceGroups/demo-rg" -rolename "Reader" -principalName "user@contoso.com"
+
+    Resolve the provided principal name to its object ID before creating the active assignment.
+
+    PS> New-PIMAzureResourceActiveAssignment -tenantID $tenantID -subscriptionID $subscriptionId -rolename "Storage Blob Data Contributor" -principalID 3604fe63-cb67-4b60-99c9-707d46ab9092 -condition "((!(ActionMatches{'Microsoft.Storage/storageAccounts/blobServices/containers/blobs/read'})) OR (@Resource[Microsoft.Storage/storageAccounts/blobServices/containers:name] StringEquals 'my-container'))" -conditionVersion "2.0"
+
+    Create an active assignment with an ABAC condition restricting blob access to a specific container.
+
     .Link
     https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-resource-roles-assign-roles
     .Notes
@@ -40,48 +55,77 @@
 #>
 function New-PIMAzureResourceActiveAssignment {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute("PSAvoidUsingWriteHost", "")]
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'ByPrincipalId')]
     param (
-        [Parameter(Position = 0, Mandatory = $true)]
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ByPrincipalId')]
+        [Parameter(Position = 0, Mandatory = $true, ParameterSetName = 'ByPrincipalName')]
         [String]
         # Entra ID tenantID
         $tenantID,
 
-        [Parameter(Position = 1)]
+        [Parameter(Position = 1, ParameterSetName = 'ByPrincipalId')]
+        [Parameter(Position = 1, ParameterSetName = 'ByPrincipalName')]
         [String]
         # subscription ID
         $subscriptionID,
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [String]
         # scope if not at the subscription level
         $scope,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalId')]
         [String]
         # Principal ID
         $principalID,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalName')]
+        [String]
+        # Principal name or identifier
+        $principalName,
+
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalId')]
+        [Parameter(Mandatory = $true, ParameterSetName = 'ByPrincipalName')]
         [string]
         # the rolename for which we want to create an assigment
         $rolename,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [string]
         # duration of the assignment, if not set we will use the maximum allowed value from the role policy
         $duration,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [string]
         # stat date of assignment if not provided we will use curent time
         $startDateTime,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [string]
         # justification (will be auto generated if not provided)
         $justification,
 
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
         [switch]
         # the assignment will not expire
-        $permanent
+        $permanent,
+
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
+        [string]
+        # ABAC condition expression for role assignment conditions
+        $condition,
+
+        [Parameter(ParameterSetName = 'ByPrincipalId')]
+        [Parameter(ParameterSetName = 'ByPrincipalName')]
+        [string]
+        # Condition language version, defaults to "2.0" when condition is provided
+        $conditionVersion
 
     )
 
@@ -93,6 +137,12 @@ function New-PIMAzureResourceActiveAssignment {
         $scope = "/subscriptions/$subscriptionID"
     }
     $script:tenantID = $tenantID
+
+    if ($PSCmdlet.ParameterSetName -eq 'ByPrincipalName') {
+        $resolvedPrincipal = Resolve-EasyPIMPrincipal -PrincipalIdentifier $principalName -AllowDisplayNameLookup -AllowAppIdLookup -ErrorContext 'New-PIMAzureResourceActiveAssignment'
+        $principalID = $resolvedPrincipal.Id
+        Write-Verbose "Resolved principalName '$principalName' to object ID '$principalID' (type=$($resolvedPrincipal.Type))."
+    }
 
     $ARMhost = Get-PIMAzureEnvironmentEndpoint -EndpointType 'ARM'
     $ARMendpoint = "$($ARMhost.TrimEnd('/'))/$scope/providers/Microsoft.Authorization"
@@ -154,6 +204,17 @@ function New-PIMAzureResourceActiveAssignment {
         $type = "NoExpiration"
     }
 
+    $conditionBlock = ''
+    if ($PSBoundParameters.Keys.Contains('condition')) {
+        if (-not $PSBoundParameters.Keys.Contains('conditionVersion')) {
+            $conditionVersion = '2.0'
+        }
+        $escapedCondition = $condition -replace '"', '\"'
+        $conditionBlock = ',
+        "condition": "' + $escapedCondition + '",
+        "conditionVersion": "' + $conditionVersion + '"'
+    }
+
     $body = '
 {
     "properties": {
@@ -168,7 +229,8 @@ function New-PIMAzureResourceActiveAssignment {
                 "endDateTime": null,
                 "duration": "'+ $duration + '"
             }
-        }
+        }' + $conditionBlock + '
+    }
 }
 '
     $guid = New-Guid

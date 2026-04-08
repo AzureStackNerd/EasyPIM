@@ -11,7 +11,7 @@
       .EXAMPLE
         PS> Set-PIMAzureResourcePolicy -TenantID $tenantID -SubscriptionId $subscriptionID -rolename "contributor" -Approvers  @(@{"Id"="00b34bb3-8a6b-45ce-a7bb-c7f7fb400507";"Name"="John";"Type"="user"}) -ApprovalRequired $true
 
-        Require activation approval and set John as an approver
+        Require activation approval and set John as an approver. Note: Type is case-insensitive ("user", "User", "group", "Group" all work)
 
       .Link
 
@@ -90,6 +90,7 @@ function Set-PIMAzureResourcePolicy {
 
         [Parameter()]
         # Array of approvers in the format: @(@{"Id"=<ObjectID>;"Name"="John":"Type"="user|group"}, .... )
+        # Note: Type is case-insensitive (accepts "user", "User", "group", "Group")
         $Approvers,
 
         [Parameter()]
@@ -192,7 +193,7 @@ function Set-PIMAzureResourcePolicy {
         if ($ApprovalRequired -eq $true -and $null -eq $Approvers ) { throw "`n /!\ At least one approver is required if approval is enable, please set -Approvers parameter`n`n" }
 
         $rolename | ForEach-Object {
-            $config = get-config $script:scope $_
+            $config = get-config $script:scope $_ $null $script:tenantID
             $rules = @()
 
             if ($PSBoundParameters.Keys.Contains('ActivationDuration')) {

@@ -54,10 +54,60 @@ function Set-EPOAzureRolePolicy {
     # Build parameter map for Set-PIMAzureResourcePolicy (Core public API)
     $params = @{
         tenantID = $TenantId
-        subscriptionID = $SubscriptionId
         rolename = @($PolicyDefinition.RoleName)
     }
+    # Determine scope type: Management Group vs Subscription
+    $scopeVal = $null
+    if ($PolicyDefinition.PSObject.Properties['Scope'] -and $PolicyDefinition.Scope) { $scopeVal = [string]$PolicyDefinition.Scope }
+    if ($scopeVal) {
+        $normalizedScope = $scopeVal.TrimStart('/')
+        if ($normalizedScope -like 'providers/Microsoft.Management/managementGroups/*') {
+            $params.scope = $normalizedScope
+        } elseif ($normalizedScope -like 'subscriptions/*') {
+            # When a scope is supplied explicitly, prefer the dedicated -Scope parameter set.
+            # Avoid passing -SubscriptionId simultaneously because Set-PIMAzureResourcePolicy
+            # exposes mutually exclusive parameter sets for SubscriptionId vs Scope.
+            $params.scope = $normalizedScope
+        } else {
+            # Unknown prefix: fall back to explicit Scope if provided; do not force subscription path
+            $params.scope = $normalizedScope
+        }
+    } else {
+        # No per-policy scope provided; fall back to subscription mode
+        $params.subscriptionID = $SubscriptionId
+    }
+    Write-Verbose ("[DEBUG] Scope analysis: raw='{0}' normalized='{1}'" -f $scopeVal, $normalizedScope)
+    Write-Verbose ("[DEBUG] Orchestrator param map for Set-PIMAzureResourcePolicy: {0}" -f ((($params.GetEnumerator() | Sort-Object Key) | ForEach-Object { "{0}='{1}'" -f $_.Key, $_.Value }) -join '; '))
+
     $resolved = $PolicyDefinition.ResolvedPolicy; if (-not $resolved) { $resolved = $PolicyDefinition }
+
+    # Flatten notifications from templates
+    try {
+        if ($resolved.PSObject.Properties['Notifications'] -and $resolved.Notifications) {
+            $n = $resolved.Notifications
+            if ($n.PSObject.Properties['Eligibility'] -and $n.Eligibility) {
+                if ($n.Eligibility.PSObject.Properties['Alert'] -and $n.Eligibility.Alert) { try { $resolved | Add-Member -NotePropertyName 'Notification_EligibleAssignment_Alert' -NotePropertyValue $n.Eligibility.Alert -Force } catch { $resolved.Notification_EligibleAssignment_Alert = $n.Eligibility.Alert } }
+                if ($n.Eligibility.PSObject.Properties['Assignee'] -and $n.Eligibility.Assignee) { try { $resolved | Add-Member -NotePropertyName 'Notification_EligibleAssignment_Assignee' -NotePropertyValue $n.Eligibility.Assignee -Force } catch { $resolved.Notification_EligibleAssignment_Assignee = $n.Eligibility.Assignee } }
+                if ($n.Eligibility.PSObject.Properties['Approvers'] -and $n.Eligibility.Approvers) { try { $resolved | Add-Member -NotePropertyName 'Notification_EligibleAssignment_Approver' -NotePropertyValue $n.Eligibility.Approvers -Force } catch { $resolved.Notification_EligibleAssignment_Approver = $n.Eligibility.Approvers } }
+            }
+            if ($n.PSObject.Properties['Active'] -and $n.Active) {
+                if ($n.Active.PSObject.Properties['Alert'] -and $n.Active.Alert) { try { $resolved | Add-Member -NotePropertyName 'Notification_ActiveAssignment_Alert' -NotePropertyValue $n.Active.Alert -Force } catch { $resolved.Notification_ActiveAssignment_Alert = $n.Active.Alert } }
+                if ($n.Active.PSObject.Properties['Assignee'] -and $n.Active.Assignee) { try { $resolved | Add-Member -NotePropertyName 'Notification_ActiveAssignment_Assignee' -NotePropertyValue $n.Active.Assignee -Force } catch { $resolved.Notification_ActiveAssignment_Assignee = $n.Active.Assignee } }
+                if ($n.Active.PSObject.Properties['Approvers'] -and $n.Active.Approvers) { try { $resolved | Add-Member -NotePropertyName 'Notification_ActiveAssignment_Approver' -NotePropertyValue $n.Active.Approvers -Force } catch { $resolved.Notification_ActiveAssignment_Approver = $n.Active.Approvers } }
+            }
+            if ($n.PSObject.Properties['Activation'] -and $n.Activation) {
+                if ($n.Activation.PSObject.Properties['Alert'] -and $n.Activation.Alert) { try { $resolved | Add-Member -NotePropertyName 'Notification_Activation_Alert' -NotePropertyValue $n.Activation.Alert -Force } catch { $resolved.Notification_Activation_Alert = $n.Activation.Alert } }
+                if ($n.Activation.PSObject.Properties['Assignee'] -and $n.Activation.Assignee) { try { $resolved | Add-Member -NotePropertyName 'Notification_Activation_Assignee' -NotePropertyValue $n.Activation.Assignee -Force } catch { $resolved.Notification_Activation_Assignee = $n.Activation.Assignee } }
+                if ($n.Activation.PSObject.Properties['Approvers'] -and $n.Activation.Approvers) { try { $resolved | Add-Member -NotePropertyName 'Notification_Activation_Approver' -NotePropertyValue $n.Activation.Approvers -Force } catch { $resolved.Notification_Activation_Approver = $n.Activation.Approvers } }
+            }
+        }
+    } catch { Write-Verbose ("[Policy][Azure] Notification flattening skipped: {0}" -f $_.Exception.Message) }
+
+    # Normalize Notification_* to Hashtable
+    try {
+        function Convert-ToNotifHashtable { param([Parameter(Mandatory)][object]$Obj) $h=@{}; $getVal={param($o,[string]$name) if ($o -is [hashtable]) {return $o[$name]} if ($o -is [pscustomobject]) {return ($o.PSObject.Properties[$name]).Value} return $null}; $boolVal=$getVal.Invoke($Obj,'isDefaultRecipientEnabled'); if ($null -eq $boolVal) { $boolVal = $getVal.Invoke($Obj,'isDefaultRecipientsEnabled') } if ($null -ne $boolVal) { $h['isDefaultRecipientEnabled']=[bool]$boolVal } else { $h['isDefaultRecipientEnabled']=$true }; $level=$getVal.Invoke($Obj,'notificationLevel'); if ($null -eq $level) { $level=$getVal.Invoke($Obj,'NotificationLevel') } if ($null -ne $level) { $h['notificationLevel']="${level}" } else { $h['notificationLevel']='All' }; $recips=$getVal.Invoke($Obj,'Recipients'); if ($null -eq $recips) { $recips=$getVal.Invoke($Obj,'recipients') } if ($null -eq $recips) { $h['Recipients']=@() } elseif ($recips -is [string]) { $h['Recipients']=($recips -split ',') | ForEach-Object { $_.ToString().Trim() } | Where-Object { $_ } } else { $h['Recipients']=@($recips | ForEach-Object { $_.ToString() }) } return $h }
+        foreach ($np in @('Notification_EligibleAssignment_Alert','Notification_EligibleAssignment_Assignee','Notification_EligibleAssignment_Approver','Notification_ActiveAssignment_Alert','Notification_ActiveAssignment_Assignee','Notification_ActiveAssignment_Approver','Notification_Activation_Alert','Notification_Activation_Assignee','Notification_Activation_Approver')) { if ($resolved.PSObject.Properties[$np] -and $null -ne $resolved.$np) { $resolved.$np = Convert-ToNotifHashtable -Obj $resolved.$np } }
+    } catch { Write-Verbose ("[Policy][Azure] Notification normalization skipped: {0}" -f $_.Exception.Message) }
 
     # Apply business rules validation to handle MFA/Authentication Context conflicts
     Write-Verbose "[DEBUG] Azure role '$($PolicyDefinition.RoleName)': Checking for Auth Context conflicts"

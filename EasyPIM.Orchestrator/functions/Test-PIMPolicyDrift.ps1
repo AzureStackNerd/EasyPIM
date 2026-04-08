@@ -99,30 +99,56 @@ function Test-PIMPolicyDrift {
 
 	Write-Verbose -Message "Starting PIM policy drift test. ConfigPath: $ConfigPath, KeyVaultName: $KeyVaultName, SecretName: $SecretName"
 
-	# Load config using enhanced error handling
-	if ($KeyVaultName -and $SecretName) {
-		Write-Verbose "Loading config from Azure Key Vault using enhanced error handling: $KeyVaultName, secret: $SecretName"
-		try {
-			# Use the enhanced Get-EasyPIMConfiguration with retry logic
-			$json = Get-EasyPIMConfiguration -KeyVaultName $KeyVaultName -SecretName $SecretName
-			$configRaw = $json | ConvertTo-Json -Depth 100 # For logging purposes
-		} catch {
-			Write-Error "Failed to load config from Key Vault with enhanced error handling: $($_.Exception.Message)"
-			throw
+	# Initialize telemetry for this execution
+	$telemetryStartTime = Get-Date
+	$sessionId = [System.Guid]::NewGuid().ToString()
+
+	try {
+		# Load config using enhanced error handling
+		if ($KeyVaultName -and $SecretName) {
+			Write-Verbose "Loading config from Azure Key Vault using enhanced error handling: $KeyVaultName, secret: $SecretName"
+			try {
+				# Use the enhanced Get-EasyPIMConfiguration with retry logic
+				$json = Get-EasyPIMConfiguration -KeyVaultName $KeyVaultName -SecretName $SecretName
+				$configRaw = $json | ConvertTo-Json -Depth 100 # For logging purposes
+			} catch {
+				Write-Error "Failed to load config from Key Vault with enhanced error handling: $($_.Exception.Message)"
+				throw
+			}
+		} elseif ($ConfigPath) {
+			try {
+				$ConfigPath = (Resolve-Path -Path $ConfigPath -ErrorAction Stop).Path
+				# Use enhanced file loading too
+				$json = Get-EasyPIMConfiguration -ConfigFilePath $ConfigPath
+				$configRaw = Get-Content -Raw -Path $ConfigPath # For logging purposes
+			} catch {
+				throw "Failed to load config file: $($_.Exception.Message)"
+			}
+		} else {
+			throw "You must specify either -ConfigPath or both -KeyVaultName and -SecretName."
 		}
-	} elseif ($ConfigPath) {
-		try {
-			$ConfigPath = (Resolve-Path -Path $ConfigPath -ErrorAction Stop).Path
-			# Use enhanced file loading too
-			$json = Get-EasyPIMConfiguration -ConfigFilePath $ConfigPath
-			$configRaw = Get-Content -Raw -Path $ConfigPath # For logging purposes
-		} catch {
-			throw "Failed to load config file: $($_.Exception.Message)"
+		if (-not $json) { throw "Parsed JSON object is null - invalid configuration." }
+
+		# Send startup telemetry (non-blocking)
+		$startupProperties = @{
+			"function" = "Test-PIMPolicyDrift"
+			"config_source" = if ($KeyVaultName -and $SecretName) { "KeyVault" } else { "File" }
+			"fail_on_drift" = $FailOnDrift.IsPresent
+			"pass_thru" = $PassThru.IsPresent
+			"has_subscription_id" = (-not [string]::IsNullOrEmpty($SubscriptionId))
+			"session_id" = $sessionId
 		}
-	} else {
-		throw "You must specify either -ConfigPath or both -KeyVaultName and -SecretName."
-	}
-	if (-not $json) { throw "Parsed JSON object is null - invalid configuration." }
+		try {
+			if ($KeyVaultName -and $SecretName) {
+				# For KeyVault configs, pass the loaded config object directly
+				Send-TelemetryEventFromConfig -EventName "drift_test_startup" -Properties $startupProperties -Config $json
+			} else {
+				# For file-based configs, use the file path
+				Send-TelemetryEvent -EventName "drift_test_startup" -Properties $startupProperties -ConfigPath $ConfigPath
+			}
+		} catch {
+			Write-Verbose "Telemetry startup failed (non-blocking): $($_.Exception.Message)"
+		}
 
 	# Initialize collections for expected policies
 	$expectedAzure = @()
@@ -141,28 +167,61 @@ function Test-PIMPolicyDrift {
 	try {
 		$processedConfig = Initialize-EasyPIMPolicies -Config $json -PolicyTemplates $templates
 		$expectedEntra = $processedConfig.EntraRolePolicies | ForEach-Object {
-			$obj = [pscustomobject]@{ RoleName = $_.RoleName; ResolvedPolicy = $_.Policy }
-			$obj
+			$resolvedPolicy = if ($_.PSObject.Properties['ResolvedPolicy']) { $_.ResolvedPolicy } else { $_.Policy }
+			[pscustomobject]@{ RoleName = $_.RoleName; ResolvedPolicy = $resolvedPolicy }
 		}
 		$expectedAzure = $processedConfig.AzureRolePolicies | ForEach-Object {
-			$obj = [pscustomobject]@{ RoleName = $_.RoleName; Scope = $_.Scope; ResolvedPolicy = $_.Policy }
-			$obj
+			$resolvedPolicy = if ($_.PSObject.Properties['ResolvedPolicy']) { $_.ResolvedPolicy } else { $_.Policy }
+			[pscustomobject]@{ RoleName = $_.RoleName; Scope = $_.Scope; ResolvedPolicy = $resolvedPolicy }
 		}
 		$expectedGroup = $processedConfig.GroupPolicies | ForEach-Object {
-			$obj = [pscustomobject]@{ GroupId = $_.GroupId; GroupName = $_.GroupName; RoleName = $_.RoleName; ResolvedPolicy = $_.Policy }
-			$obj
+			$resolvedPolicy = if ($_.PSObject.Properties['ResolvedPolicy']) { $_.ResolvedPolicy } else { $_.Policy }
+			[pscustomobject]@{ GroupId = $_.GroupId; GroupName = $_.GroupName; RoleName = $_.RoleName; ResolvedPolicy = $resolvedPolicy }
 		}
 	} catch {
 		Write-Warning "Failed to use orchestrator policy processing, falling back to local logic: $_"
 
-		# Fallback to original logic - process different configuration formats
-		if ($json.PSObject.Properties['AzureRolePolicies']) { $expectedAzure += $json.AzureRolePolicies }
-		if ($json.PSObject.Properties['EntraRolePolicies']) { $expectedEntra += $json.EntraRolePolicies }
-		if ($json.PSObject.Properties['GroupPolicies']) { $expectedGroup += $json.GroupPolicies }
+		# Clear any partially populated collections to prevent duplication
+		$expectedAzure = @()
+		$expectedEntra = @()
+		$expectedGroup = @()
 
-		# Process nested format configurations
-		if ($json.PSObject.Properties['AzureRoles'] -and $json.AzureRoles.PSObject.Properties['Policies']) {
-			foreach ($prop in $json.AzureRoles.Policies.PSObject.Properties) {
+	# Fallback to original logic - process different configuration formats
+	if ($json.PSObject.Properties['AzureRolePolicies']) { $expectedAzure += $json.AzureRolePolicies }
+	if ($json.PSObject.Properties['EntraRolePolicies']) {
+		if ($json.EntraRolePolicies -is [System.Collections.IEnumerable] -and $json.EntraRolePolicies -isnot [string]) {
+			foreach ($entry in $json.EntraRolePolicies) {
+				if ($entry -and $entry.PSObject.Properties['RoleName']) {
+					$expectedEntra += $entry
+				}
+			}
+		} else {
+			$expectedEntra += $json.EntraRolePolicies
+		}
+	}
+	if ($json.PSObject.Properties['GroupPolicies']) {
+		if ($json.GroupPolicies -is [System.Collections.IEnumerable] -and $json.GroupPolicies -isnot [string]) {
+			foreach ($entry in $json.GroupPolicies) {
+				if ($entry -and ($entry.PSObject.Properties['GroupId'] -or $entry.PSObject.Properties['GroupName'])) {
+					$expectedGroup += $entry
+				}
+			}
+		} else {
+			$expectedGroup += $json.GroupPolicies
+		}
+	}
+
+	# Process nested format configurations
+	if ($json.PSObject.Properties['AzureRoles'] -and $json.AzureRoles.PSObject.Properties['Policies']) {
+		$azurePolicies = $json.AzureRoles.Policies
+		if ($azurePolicies -is [System.Collections.IEnumerable] -and $azurePolicies -isnot [string]) {
+			foreach ($entry in $azurePolicies) {
+				if ($entry -and $entry.PSObject.Properties['RoleName']) {
+					$expectedAzure += $entry
+				}
+			}
+		} else {
+			foreach ($prop in $azurePolicies.PSObject.Properties) {
 				$roleName = $prop.Name
 				$policy = $prop.Value
 				if (-not $policy) { continue }
@@ -176,9 +235,18 @@ function Test-PIMPolicyDrift {
 				$expectedAzure += $obj
 			}
 		}
+	}
 
-		if ($json.PSObject.Properties['EntraRoles'] -and $json.EntraRoles.PSObject.Properties['Policies']) {
-			foreach ($prop in $json.EntraRoles.Policies.PSObject.Properties) {
+	if ($json.PSObject.Properties['EntraRoles'] -and $json.EntraRoles.PSObject.Properties['Policies']) {
+		$entraPolicies = $json.EntraRoles.Policies
+		if ($entraPolicies -is [System.Collections.IEnumerable] -and $entraPolicies -isnot [string]) {
+			foreach ($entry in $entraPolicies) {
+				if ($entry -and $entry.PSObject.Properties['RoleName']) {
+					$expectedEntra += $entry
+				}
+			}
+		} else {
+			foreach ($prop in $entraPolicies.PSObject.Properties) {
 				$roleName = $prop.Name
 				$policy = $prop.Value
 				if (-not $policy) { continue }
@@ -190,9 +258,18 @@ function Test-PIMPolicyDrift {
 				$expectedEntra += $obj
 			}
 		}
+	}
 
-		if ($json.PSObject.Properties['GroupRoles'] -and $json.GroupRoles.PSObject.Properties['Policies']) {
-			foreach ($groupProperty in $json.GroupRoles.Policies.PSObject.Properties) {
+	if ($json.PSObject.Properties['Groups'] -and $json.Groups.PSObject.Properties['Policies']) {
+		$groupPolicies = $json.Groups.Policies
+		if ($groupPolicies -is [System.Collections.IEnumerable] -and $groupPolicies -isnot [string]) {
+			foreach ($entry in $groupPolicies) {
+				if ($entry -and ($entry.PSObject.Properties['GroupId'] -or $entry.PSObject.Properties['GroupName']) -and $entry.PSObject.Properties['RoleName']) {
+					$expectedGroup += $entry
+				}
+			}
+		} else {
+			foreach ($groupProperty in $groupPolicies.PSObject.Properties) {
 				$groupId = $groupProperty.Name
 				$roleBlock = $groupProperty.Value
 				if (-not $roleBlock) { continue }
@@ -210,6 +287,27 @@ function Test-PIMPolicyDrift {
 				}
 			}
 		}
+	}
+
+	if ($json.PSObject.Properties['GroupRoles'] -and $json.GroupRoles.PSObject.Properties['Policies']) {
+		foreach ($groupProperty in $json.GroupRoles.Policies.PSObject.Properties) {
+			$groupId = $groupProperty.Name
+			$roleBlock = $groupProperty.Value
+			if (-not $roleBlock) { continue }
+
+			foreach ($roleProperty in $roleBlock.PSObject.Properties) {
+				$roleName = $roleProperty.Name
+				$policy = $roleProperty.Value
+				if (-not $policy) { continue }
+
+				$obj = [pscustomobject]@{ GroupId = $groupId; RoleName = $roleName }
+				foreach ($policyProperty in $policy.PSObject.Properties) {
+					$obj | Add-Member -NotePropertyName $policyProperty.Name -NotePropertyValue $policyProperty.Value -Force
+				}
+				$expectedGroup += $obj
+			}
+		}
+	}
 
 		# Apply template resolution for fallback processing
 		$expectedAzure = $expectedAzure | ForEach-Object -Process {
@@ -230,10 +328,20 @@ function Test-PIMPolicyDrift {
 	$results = @()
 	$driftCount = 0
 
+	# Display processing summary
+	$totalPolicies = $expectedAzure.Count + $expectedEntra.Count + $expectedGroup.Count
+	if ($totalPolicies -gt 0) {
+		Write-Host "🔍 Processing $totalPolicies policies..." -ForegroundColor Cyan
+		if ($expectedAzure.Count -gt 0) { Write-Host "   • Azure Resource roles: $($expectedAzure.Count)" -ForegroundColor Gray }
+		if ($expectedEntra.Count -gt 0) { Write-Host "   • Entra roles: $($expectedEntra.Count)" -ForegroundColor Gray }
+		if ($expectedGroup.Count -gt 0) { Write-Host "   • Group roles: $($expectedGroup.Count)" -ForegroundColor Gray }
+	}
+
 	# Process Azure role policies
 	if ($expectedAzure.Count -gt 0 -and -not $SubscriptionId) {
 		Write-Warning -Message "Azure role policies present but no -SubscriptionId provided; skipping Azure role validation."
 	} elseif ($expectedAzure.Count -gt 0) {
+		Write-Host "📋 Testing Azure Resource role policies..." -ForegroundColor DarkCyan
 		foreach ($policy in $expectedAzure) {
 			$resolvedPolicy = Get-ResolvedPolicyObject -Policy $policy
 
@@ -280,6 +388,9 @@ function Test-PIMPolicyDrift {
 	}
 
 	# Process Entra role policies
+	if ($expectedEntra.Count -gt 0) {
+		Write-Host "🏢 Testing Entra role policies..." -ForegroundColor DarkCyan
+	}
 	foreach ($policy in $expectedEntra) {
 		if ($policy._RoleNotFound) {
 			$results += [pscustomobject]@{
@@ -316,6 +427,9 @@ function Test-PIMPolicyDrift {
 	}
 
 	# Process Group role policies
+	if ($expectedGroup.Count -gt 0) {
+		Write-Host "👥 Testing Group role policies..." -ForegroundColor DarkCyan
+	}
 	foreach ($policy in $expectedGroup) {
 		$resolvedPolicy = Get-ResolvedPolicyObject -Policy $policy
 
@@ -400,5 +514,75 @@ function Test-PIMPolicyDrift {
 		throw "PIM policy drift detected."
 	}
 
+	# Send completion telemetry (non-blocking)
+	$telemetryEndTime = Get-Date
+	$executionDuration = ($telemetryEndTime - $telemetryStartTime).TotalSeconds
+
+	$completionProperties = @{
+		"function" = "Test-PIMPolicyDrift"
+		"config_source" = if ($KeyVaultName -and $SecretName) { "KeyVault" } else { "File" }
+		"execution_duration_seconds" = [math]::Round($executionDuration, 2)
+		"success" = $true
+		"session_id" = $sessionId
+		"total_policies_tested" = $results.Count
+		"policies_with_drift" = ($results | Where-Object { $_.Status -eq 'Drift' }).Count
+		"policies_with_errors" = ($results | Where-Object { $_.Status -eq 'Error' }).Count
+		"policies_matching" = ($results | Where-Object { $_.Status -eq 'Match' }).Count
+		"policies_skipped" = ($results | Where-Object { $_.Status -eq 'SkippedRoleNotFound' }).Count
+		"azure_policies_tested" = ($results | Where-Object { $_.Type -eq 'AzureRole' }).Count
+		"entra_policies_tested" = ($results | Where-Object { $_.Type -eq 'EntraRole' }).Count
+		"group_policies_tested" = ($results | Where-Object { $_.Type -eq 'Group' }).Count
+		"has_subscription_id" = (-not [string]::IsNullOrEmpty($SubscriptionId))
+		"fail_on_drift" = $FailOnDrift.IsPresent
+		"pass_thru" = $PassThru.IsPresent
+	}
+
+	try {
+		if ($KeyVaultName -and $SecretName) {
+			# For KeyVault configs, pass the loaded config object directly
+			Send-TelemetryEventFromConfig -EventName "drift_test_completion" -Properties $completionProperties -Config $json
+		} else {
+			# For file-based configs, use the file path
+			Send-TelemetryEvent -EventName "drift_test_completion" -Properties $completionProperties -ConfigPath $ConfigPath
+		}
+	} catch {
+		Write-Verbose "Telemetry completion failed (non-blocking): $($_.Exception.Message)"
+	}
+
 	return $results
+
+	} catch {
+		# Send error telemetry (non-blocking)
+		if ($sessionId) {
+			$errorProperties = @{
+				"function" = "Test-PIMPolicyDrift"
+				"config_source" = if ($KeyVaultName -and $SecretName) { "KeyVault" } else { "File" }
+				"fail_on_drift" = $FailOnDrift.IsPresent
+				"success" = $false
+				"error_type" = $_.Exception.GetType().Name
+				"session_id" = $sessionId
+			}
+
+			if ($telemetryStartTime) {
+				$errorDuration = ((Get-Date) - $telemetryStartTime).TotalSeconds
+				$errorProperties["execution_duration_seconds"] = [math]::Round($errorDuration, 2)
+			}
+
+			try {
+				if ($KeyVaultName -and $SecretName) {
+					# For KeyVault configs, pass the loaded config object directly
+					Send-TelemetryEventFromConfig -EventName "drift_test_error" -Properties $errorProperties -Config $json
+				} else {
+					# For file-based configs, use the file path
+					Send-TelemetryEvent -EventName "drift_test_error" -Properties $errorProperties -ConfigPath $ConfigPath
+				}
+			} catch {
+				Write-Verbose "Telemetry error failed (non-blocking): $($_.Exception.Message)"
+			}
+		}
+
+		Write-Error -Message "[ERROR] An error occurred during drift testing: $($_.Exception.Message)"
+		Write-Verbose -Message "Stack trace: $($_.ScriptStackTrace)"
+		throw
+	}
 }
