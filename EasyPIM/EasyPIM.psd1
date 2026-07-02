@@ -54,6 +54,7 @@ FunctionsToExport = @(
     "New-PIMAzureResourceActiveAssignment",
     "New-PIMAzureResourceEligibleAssignment",
     "Update-PIMAzureResourceEligibleAssignment",
+    "Update-PIMAzureResourceActiveAssignment",
     "Remove-PIMAzureResourceEligibleAssignment",
     "Remove-PIMAzureResourceActiveAssignment",
     "Get-PIMEntraRolePolicy",
