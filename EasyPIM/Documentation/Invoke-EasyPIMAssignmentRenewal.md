@@ -9,6 +9,9 @@ request type, which requires no approval, so it can run unattended in a pipeline
 - **v1 supports Azure resource roles only.** Entra directory roles and PIM-for-Groups are not yet supported.
 - Only assignments **declared in the configuration** are extended. Live assignments not present in the
   configuration are never touched.
+- Matching is by exact scope. An assignment **inherited** from a higher scope (for example, a management
+  group) whose configured scope is a child subscription is treated as not-live at the configured scope and
+  is skipped. Declare the assignment at the scope where it actually exists to have it renewed.
 
 ## Parameters
 
