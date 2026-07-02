@@ -110,4 +110,40 @@ Describe "Invoke-EasyPIMAssignmentRenewal" -Tag 'Unit' {
         $script:extendCalls.Count | Should -Be 0
         $result.FoundExpiring | Should -Be 0
     }
+
+    It "Handles a [datetime] endDateTime under a non-US culture (regression: culture-sensitive parse)" {
+        # The real getters return endDateTime as a [datetime] (ConvertFrom-Json coerces the ISO value),
+        # NOT a string. A previous implementation re-parsed it via [datetime]::Parse(<datetime>), which
+        # round-trips through a US-format string and then reparses under the session culture. Under a
+        # dd/MM culture (e.g. nl-NL) that silently threw (day > 12) or mis-dated the value, dropping
+        # real expiring assignments. This test pins the behaviour: a [datetime] with day-of-month > 12,
+        # under nl-NL, must still be found.
+        $originalCulture = [System.Threading.Thread]::CurrentThread.CurrentCulture
+        try {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::new('nl-NL')
+
+            $end = (Get-Date).ToUniversalTime().AddDays(100)
+            if ($end.Day -le 12) { $end = $end.AddDays(13) }  # guarantee day-of-month > 12, still < 365 days out
+
+            Mock -ModuleName EasyPIM.Orchestrator Get-PIMAzureResourceEligibleAssignment {
+                return @([PSCustomObject]@{
+                    PrincipalId = "11111111-1111-1111-1111-111111111111"
+                    RoleName    = "Reader"
+                    ScopeId     = "/subscriptions/sub1"
+                    Status      = "Provisioned"
+                    endDateTime = $end   # a real [datetime] object, as the live getter returns
+                    id          = "inst-guid"
+                })
+            }
+
+            $result = Invoke-EasyPIMAssignmentRenewal -ConfigFilePath "dummy.json" `
+                -TenantId "00000000-0000-0000-0000-000000000000" -SubscriptionId "sub1" -ThresholdDays 365
+
+            $result.FoundExpiring | Should -Be 1
+            $script:extendCalls.Count | Should -Be 1
+        }
+        finally {
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = $originalCulture
+        }
+    }
 }

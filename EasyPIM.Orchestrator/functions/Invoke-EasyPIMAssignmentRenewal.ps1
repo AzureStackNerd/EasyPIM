@@ -133,10 +133,23 @@ function Invoke-EasyPIMAssignmentRenewal {
         } | Select-Object -First 1
         if (-not $match) { continue }  # declared but not currently live -> New-EasyPIMAssignments handles creation, not us
 
-        # Skip permanent / not-expiring
-        if ($match.endDateTime -eq 'permanent' -or [string]::IsNullOrWhiteSpace($match.endDateTime)) { continue }
+        # Skip permanent / not-expiring. The getter returns endDateTime as a [datetime]
+        # (ConvertFrom-Json coerces the ISO value) for time-bound assignments, or the
+        # literal string 'permanent'. Use the [datetime] directly; only string-parse as a
+        # fallback, and then with InvariantCulture so a non-US session culture cannot
+        # mis-read or silently drop the value.
+        $edt = $match.endDateTime
+        if ($null -eq $edt) { continue }
         $end = $null
-        try { $end = [datetime]::Parse($match.endDateTime).ToUniversalTime() } catch { continue }
+        if ($edt -is [datetime]) {
+            $end = ([datetime]$edt).ToUniversalTime()
+        } else {
+            $edtStr = [string]$edt
+            if ($edtStr -eq 'permanent' -or [string]::IsNullOrWhiteSpace($edtStr)) { continue }
+            $parsedEnd = [datetime]::MinValue
+            if (-not [datetime]::TryParse($edtStr, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::RoundtripKind, [ref]$parsedEnd)) { continue }
+            $end = $parsedEnd.ToUniversalTime()
+        }
         if ($end -gt $cutoff) { continue }
 
         $summary.FoundExpiring++
