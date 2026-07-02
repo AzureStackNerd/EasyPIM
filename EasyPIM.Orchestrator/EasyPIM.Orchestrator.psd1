@@ -21,7 +21,8 @@
         'Test-PIMPolicyDrift',
         'Test-PIMEndpointDiscovery',
         'Get-EasyPIMConfiguration',
-        'Disable-EasyPIMTelemetry'
+        'Disable-EasyPIMTelemetry',
+        'Invoke-EasyPIMAssignmentRenewal'
     )
     AliasesToExport   = @()
     CmdletsToExport   = @()
