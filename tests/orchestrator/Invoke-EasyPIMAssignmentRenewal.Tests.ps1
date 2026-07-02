@@ -23,7 +23,8 @@ Describe "Invoke-EasyPIMAssignmentRenewal" -Tag 'Unit' {
         }
 
         Mock -ModuleName EasyPIM.Orchestrator Get-EasyPIMConfiguration { return $script:cfg }
-        Mock -ModuleName EasyPIM.Orchestrator Initialize-EasyPIMAssignments { param($Config) return $script:cfg }
+        # Intentionally NOT mocking Initialize-EasyPIMAssignments: the real normalizer must run
+        # so the function exercises the normalized flat arrays ($processed.AzureRoles / .AzureRolesActive).
 
         # One live eligible assignment expiring in 5 days (inside the 14-day window)
         Mock -ModuleName EasyPIM.Orchestrator Get-PIMAzureResourceEligibleAssignment {

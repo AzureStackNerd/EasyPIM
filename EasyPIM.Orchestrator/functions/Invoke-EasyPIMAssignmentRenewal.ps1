@@ -70,7 +70,14 @@ function Invoke-EasyPIMAssignmentRenewal {
     }
     $processed = Initialize-EasyPIMAssignments -Config $config
 
-    if (-not $processed.Assignments -or -not ($processed.Assignments.PSObject.Properties.Name -contains 'AzureRoles') -or -not $processed.Assignments.AzureRoles) {
+    # Consume the normalized flat arrays produced by Initialize-EasyPIMAssignments:
+    #   $processed.AzureRoles       -> eligible Azure resource role assignments
+    #   $processed.AzureRolesActive -> active Azure resource role assignments
+    # Each item is a clean object exposing .RoleName, .Scope, .PrincipalId, .AssignmentType.
+    $eligibleItems = @($processed.AzureRoles)
+    $activeItems   = @($processed.AzureRolesActive)
+
+    if ($eligibleItems.Count -eq 0 -and $activeItems.Count -eq 0) {
         Write-Host "No Azure role assignments declared in configuration; nothing to renew." -ForegroundColor Yellow
         return $summary
     }
@@ -78,91 +85,113 @@ function Invoke-EasyPIMAssignmentRenewal {
     $now = (Get-Date).ToUniversalTime()
     $cutoff = $now.AddDays($ThresholdDays)
 
-    foreach ($roleBlock in $processed.Assignments.AzureRoles) {
-        $roleName = $roleBlock.RoleName; if (-not $roleName) { $roleName = $roleBlock.roleName }
-        $scope    = $roleBlock.Scope;    if (-not $scope)    { $scope = $roleBlock.scope }
-        if (-not $roleName -or -not $scope) { continue }
+    # Per-scope live-assignment caches (avoid N+1 fetches) and per-scope|role policy cache.
+    $eligibleCache = @{}
+    $activeCache   = @{}
+    $policyCache   = @{}
 
-        # Pre-fetch live assignments once per scope
-        $liveEligible = @()
-        $liveActive   = @()
-        try { $liveEligible = @(Get-PIMAzureResourceEligibleAssignment -tenantID $TenantId -subscriptionID $SubscriptionId -scope $scope -ErrorAction SilentlyContinue) } catch { Write-Verbose "[Renewal] eligible fetch failed for ${scope}: $($_.Exception.Message)" }
-        try { $liveActive   = @(Get-PIMAzureResourceActiveAssignment   -tenantID $TenantId -subscriptionID $SubscriptionId -scope $scope -ErrorAction SilentlyContinue) } catch { Write-Verbose "[Renewal] active fetch failed for ${scope}: $($_.Exception.Message)" }
+    # Iterate eligible then active items from the normalized arrays.
+    $work = @()
+    foreach ($item in $eligibleItems) { $work += [pscustomobject]@{ Item = $item; IsActive = $false } }
+    foreach ($item in $activeItems)   { $work += [pscustomobject]@{ Item = $item; IsActive = $true  } }
 
-        # Read policy once per role/scope
-        $policy = $null
-        try { $policy = Get-PIMAzureResourcePolicy -tenantID $TenantId -scope $scope -rolename $roleName } catch { Write-Verbose "[Renewal] policy fetch failed for $roleName@${scope}: $($_.Exception.Message)" }
+    foreach ($entry in $work) {
+        $item     = $entry.Item
+        $isActive = $entry.IsActive
 
-        foreach ($a in ($roleBlock.assignments | Where-Object { $_ })) {
-            $principalId = $a.principalId
-            $isActive = ($a.assignmentType -match 'Active')
+        $roleName    = $item.RoleName
+        $scope       = $item.Scope
+        $principalId = $item.PrincipalId
+        if (-not $roleName -or -not $scope -or -not $principalId) { continue }
 
-            # Match against live assignments of the same kind
-            $liveSet = if ($isActive) { $liveActive } else { $liveEligible }
-            $match = $liveSet | Where-Object {
-                $_.PrincipalId -eq $principalId -and $_.RoleName -eq $roleName -and $_.ScopeId -eq $scope
-            } | Select-Object -First 1
-            if (-not $match) { continue }  # declared but not currently live -> New-EasyPIMAssignments handles creation, not us
-
-            # Skip permanent / not-expiring
-            if ($match.endDateTime -eq 'permanent' -or [string]::IsNullOrWhiteSpace($match.endDateTime)) { continue }
-            $end = $null
-            try { $end = [datetime]::Parse($match.endDateTime).ToUniversalTime() } catch { continue }
-            if ($end -gt $cutoff) { continue }
-
-            $summary.FoundExpiring++
-            $ctx = "Azure/$roleName@$scope/$principalId [$($a.assignmentType)]"
-
-            # Compute new end date from policy max
-            $maxDurationIso = if ($isActive) { $policy.MaximumActiveAssignmentDuration } else { $policy.MaximumEligibleAssignmentDuration }
-            $allowPermanent = if ($isActive) { $policy.AllowPermanentActiveAssignment } else { $policy.AllowPermanentEligibleAssignment }
-
-            if ([string]::IsNullOrWhiteSpace($maxDurationIso)) {
-                $reason = if ("$allowPermanent" -eq 'true') { "policy allows permanent (no max duration) - consider a permanent assignment to remove the need to extend" } else { "no maximum duration in policy" }
-                Write-Host "  SKIP  $ctx : $reason" -ForegroundColor Yellow
-                $summary.Skipped++
-                $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Skipped'; Reason = $reason }
-                continue
+        # Live assignments cached once per scope (per kind)
+        if ($isActive) {
+            if (-not $activeCache.ContainsKey($scope)) {
+                $activeCache[$scope] = @()
+                try { $activeCache[$scope] = @(Get-PIMAzureResourceActiveAssignment -tenantID $TenantId -subscriptionID $SubscriptionId -scope $scope -ErrorAction SilentlyContinue) } catch { Write-Verbose "[Renewal] active fetch failed for ${scope}: $($_.Exception.Message)" }
             }
+            $liveSet = $activeCache[$scope]
+        } else {
+            if (-not $eligibleCache.ContainsKey($scope)) {
+                $eligibleCache[$scope] = @()
+                try { $eligibleCache[$scope] = @(Get-PIMAzureResourceEligibleAssignment -tenantID $TenantId -subscriptionID $SubscriptionId -scope $scope -ErrorAction SilentlyContinue) } catch { Write-Verbose "[Renewal] eligible fetch failed for ${scope}: $($_.Exception.Message)" }
+            }
+            $liveSet = $eligibleCache[$scope]
+        }
 
-            $maxTs = $null
-            try { $maxTs = [System.Xml.XmlConvert]::ToTimeSpan($maxDurationIso) } catch { }
-            if ($null -eq $maxTs) {
-                Write-Host "  SKIP  $ctx : could not parse policy max duration '$maxDurationIso'" -ForegroundColor Yellow
-                $summary.Skipped++
-                $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Skipped'; Reason = "unparsable max duration '$maxDurationIso'" }
-                continue
-            }
-            $newEnd = ($now.Add($maxTs)).ToString("yyyy-MM-ddTHH:mm:ssZ")
-            if ("$allowPermanent" -eq 'true') {
-                Write-Host "  NOTE  $ctx : policy allows permanent; extending to policy max ($maxDurationIso). A permanent assignment would remove the need to extend." -ForegroundColor DarkCyan
-            }
+        # Policy cached once per scope|role
+        $policyKey = "$scope|$roleName"
+        if (-not $policyCache.ContainsKey($policyKey)) {
+            $policyCache[$policyKey] = $null
+            try { $policyCache[$policyKey] = Get-PIMAzureResourcePolicy -tenantID $TenantId -scope $scope -rolename $roleName } catch { Write-Verbose "[Renewal] policy fetch failed for $roleName@${scope}: $($_.Exception.Message)" }
+        }
+        $policy = $policyCache[$policyKey]
 
-            if ($WhatIfPreference) {
-                Write-Host "  What if: Extend $ctx to $newEnd" -ForegroundColor Cyan
-                $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'PlannedExtend'; NewEnd = $newEnd }
-                continue
-            }
+        # Match against live assignments of the same kind
+        $match = $liveSet | Where-Object {
+            $_.PrincipalId -eq $principalId -and $_.RoleName -eq $roleName -and $_.ScopeId -eq $scope
+        } | Select-Object -First 1
+        if (-not $match) { continue }  # declared but not currently live -> New-EasyPIMAssignments handles creation, not us
 
-            $params = @{
-                tenantID       = $TenantId
-                subscriptionID = $SubscriptionId
-                scope          = $scope
-                rolename       = $roleName
-                principalID    = $principalId
-                newEndDateTime = $newEnd
-            }
-            try {
-                if ($isActive) { Update-PIMAzureResourceActiveAssignment @params }
-                else           { Update-PIMAzureResourceEligibleAssignment @params }
-                Write-Host "  EXTENDED  $ctx -> $newEnd" -ForegroundColor Green
-                $summary.Extended++
-                $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Extended'; NewEnd = $newEnd }
-            } catch {
-                Write-Host "  FAILED  $ctx : $($_.Exception.Message)" -ForegroundColor Red
-                $summary.Skipped++
-                $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Failed'; Reason = $_.Exception.Message }
-            }
+        # Skip permanent / not-expiring
+        if ($match.endDateTime -eq 'permanent' -or [string]::IsNullOrWhiteSpace($match.endDateTime)) { continue }
+        $end = $null
+        try { $end = [datetime]::Parse($match.endDateTime).ToUniversalTime() } catch { continue }
+        if ($end -gt $cutoff) { continue }
+
+        $summary.FoundExpiring++
+        $kind = if ($isActive) { 'Active' } else { 'Eligible' }
+        $ctx = "Azure/$roleName $principalId @ $scope [$kind]"
+
+        # Compute new end date from policy max
+        $maxDurationIso = if ($isActive) { $policy.MaximumActiveAssignmentDuration } else { $policy.MaximumEligibleAssignmentDuration }
+        $allowPermanent = if ($isActive) { $policy.AllowPermanentActiveAssignment } else { $policy.AllowPermanentEligibleAssignment }
+
+        if ([string]::IsNullOrWhiteSpace($maxDurationIso)) {
+            $reason = if ("$allowPermanent" -eq 'true') { "policy allows permanent (no max duration) - consider a permanent assignment to remove the need to extend" } else { "no maximum duration in policy" }
+            Write-Host "  SKIP  $ctx : $reason" -ForegroundColor Yellow
+            $summary.Skipped++
+            $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Skipped'; Reason = $reason }
+            continue
+        }
+
+        $maxTs = $null
+        try { $maxTs = [System.Xml.XmlConvert]::ToTimeSpan($maxDurationIso) } catch { }
+        if ($null -eq $maxTs) {
+            Write-Host "  SKIP  $ctx : could not parse policy max duration '$maxDurationIso'" -ForegroundColor Yellow
+            $summary.Skipped++
+            $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Skipped'; Reason = "unparsable max duration '$maxDurationIso'" }
+            continue
+        }
+        $newEnd = ($now.Add($maxTs)).ToString("yyyy-MM-ddTHH:mm:ssZ")
+        if ("$allowPermanent" -eq 'true') {
+            Write-Host "  NOTE  $ctx : policy allows permanent; extending to policy max ($maxDurationIso). A permanent assignment would remove the need to extend." -ForegroundColor DarkCyan
+        }
+
+        if ($WhatIfPreference) {
+            Write-Host "  What if: Extend $ctx to $newEnd" -ForegroundColor Cyan
+            $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'PlannedExtend'; NewEnd = $newEnd }
+            continue
+        }
+
+        $params = @{
+            tenantID       = $TenantId
+            subscriptionID = $SubscriptionId
+            scope          = $scope
+            rolename       = $roleName
+            principalID    = $principalId
+            newEndDateTime = $newEnd
+        }
+        try {
+            if ($isActive) { Update-PIMAzureResourceActiveAssignment @params }
+            else           { Update-PIMAzureResourceEligibleAssignment @params }
+            Write-Host "  EXTENDED  $ctx -> $newEnd" -ForegroundColor Green
+            $summary.Extended++
+            $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Extended'; NewEnd = $newEnd }
+        } catch {
+            Write-Host "  FAILED  $ctx : $($_.Exception.Message)" -ForegroundColor Red
+            $summary.Skipped++
+            $summary.Details += [pscustomobject]@{ Context = $ctx; Action = 'Failed'; Reason = $_.Exception.Message }
         }
     }
 
