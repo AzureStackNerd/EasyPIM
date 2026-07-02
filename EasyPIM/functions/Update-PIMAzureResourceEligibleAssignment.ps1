@@ -58,7 +58,7 @@ function Update-PIMAzureResourceEligibleAssignment {
         # 1. Resolve role definition id
         $restUri = "$ARMendpoint/roleDefinitions?api-version=2022-04-01&`$filter=roleName eq '$rolename'"
         $roleResponse = Invoke-ARM -restURI $restUri -method "get" -body $null
-        $roleID = $roleResponse.value.id
+        $roleID = ($roleResponse.value | Select-Object -First 1).id
         if (-not $roleID) { throw "ERROR : Role '$rolename' not found at scope $scope." }
         Write-Verbose "Resolved role '$rolename' to $roleID"
 
@@ -70,7 +70,7 @@ function Update-PIMAzureResourceEligibleAssignment {
         $schedUri = "$ARMendpoint/roleEligibilitySchedules?api-version=2020-10-01-preview&`$filter=assignedTo('$principalID')"
         $schedResponse = Invoke-ARM -restURI $schedUri -method "get" -body $null
         $targetSchedule = $schedResponse.value | Where-Object {
-            $_.properties.roleDefinitionId -eq $roleID -and $_.properties.scope.id -eq $scope
+            $_.properties.roleDefinitionId -eq $roleID -and $_.properties.scope -eq $scope
         } | Select-Object -First 1
         if (-not $targetSchedule) {
             throw "ERROR : No eligible assignment found for principal $principalID role '$rolename' at scope $scope to extend."
