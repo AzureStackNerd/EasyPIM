@@ -25,6 +25,7 @@ Export-ModuleMember -Function @(
     'Get-PIMAzureResourceEligibleAssignment',
     'New-PIMAzureResourceActiveAssignment',
     'New-PIMAzureResourceEligibleAssignment',
+    'Update-PIMAzureResourceEligibleAssignment',
     'Remove-PIMAzureResourceEligibleAssignment',
     'Remove-PIMAzureResourceActiveAssignment',
     'Get-PIMEntraRolePolicy',
